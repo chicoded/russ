@@ -5,6 +5,20 @@ export const CONFIG = {
   newUserAirdropSol: 100,
   programId: 'RouG1111111111111111111111111111111111111',
   txDelayMs: 0,
+  /**
+   * Your live site URL (Vercel). Join links always use this so friends on other phones
+   * get the correct address. Example: 'https://russ-xxxx.vercel.app'
+   * Leave empty to use the current browser URL.
+   */
+  publicSiteUrl: '',
+  /**
+   * Online lobby sync — free Supabase project (see supabase/lobbies.sql).
+   * Paste URL + anon key here AND in Vercel env vars for cross-phone join by key.
+   */
+  lobbySync: {
+    supabaseUrl: '',
+    supabaseAnonKey: '',
+  },
 };
 
 export const LAMPORTS_PER_SOL = 1_000_000_000;
@@ -28,4 +42,13 @@ export function truncateAddress(address, chars = 4) {
 
 export function roundSol(n) {
   return Math.round(Number(n) * 10000) / 10000;
+}
+
+export function getPublicSiteOrigin() {
+  const configured = CONFIG.publicSiteUrl?.trim().replace(/\/$/, '');
+  if (configured) return configured;
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+  return '';
 }

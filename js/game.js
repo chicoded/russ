@@ -26,11 +26,12 @@ import {
   buildJoinLink,
   clearJoinCodeFromUrl,
   clearLastLobbyForWallet,
-  clearLobbyBootstrapFromHash,
+  clearLobbyBootstrapFromUrl,
   generateJoinCode,
   getJoinCodeFromUrl,
   getLastLobbyForWallet,
   hydrateLobbyFromStore,
+  isOnlineLobbySyncEnabled,
   loadOpenLobby,
   normalizeJoinCode,
   removeOpenLobby,
@@ -201,7 +202,13 @@ export function initGame() {
     switchMultiTab('join');
     const codeInput = $('#join-code');
     if (codeInput) codeInput.value = urlJoinCode;
-    void renderJoinRulesPreview();
+    void resolveOpenLobby(urlJoinCode).then((stored) => {
+      void renderJoinRulesPreview();
+      if (stored && stored.status === 'open') {
+        const joinBtn = $('#join-with-code-btn');
+        if (joinBtn) joinBtn.textContent = 'Join Lobby';
+      }
+    });
   } else {
     updateRejoinHint();
     updateJoinStakeFields();
@@ -257,6 +264,7 @@ function bindLobbyEvents() {
   $('#end-lobby-btn')?.addEventListener('click', endLobbyForAll);
   $('#copy-join-key-btn')?.addEventListener('click', copyJoinKey);
   $('#copy-join-link-btn')?.addEventListener('click', copyJoinLink);
+  $('#share-join-link-btn')?.addEventListener('click', shareJoinLink);
   $('#update-stake-btn')?.addEventListener('click', updateLobbyStake);
   $('#host-bullets-control')?.addEventListener('click', (e) => {
     const btn = e.target.closest('.lobby-bullet-btn');
@@ -689,10 +697,10 @@ async function renderJoinRulesPreview() {
   preview.classList.remove('hidden');
   preview.innerHTML = '<p class="hint">Looking up lobby…</p>';
 
-  const stored = await resolveOpenLobby(code);
+  const stored = await resolveOpenLobby(code, { retryMs: isOnlineLobbySyncEnabled() ? 0 : 8000 });
   if (!stored) {
     preview.innerHTML =
-      '<p class="hint">Lobby not found. Ask the host for the <strong>full join link</strong> (not just the key), and make sure you are on the same site URL.</p>';
+      '<p class="hint">Lobby not found yet. Ask the host to tap <strong>Invite Friend</strong> and send you that link — opening the link on your phone will join automatically.</p>';
     return;
   }
 
@@ -1230,6 +1238,28 @@ async function copyJoinKey() {
   }
 }
 
+async function shareJoinLink() {
+  if (!lobby.joinCode) return;
+  const link = buildJoinLink(lobby.joinCode, serializeLobbyState(lobby));
+  const shareText = `Join my Contract Roulette lobby — key ${lobby.joinCode}`;
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: 'Contract Roulette', text: shareText, url: link });
+      return;
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+    }
+  }
+
+  try {
+    await navigator.clipboard.writeText(link);
+    flashCopyBtn('#share-join-link-btn', 'Link copied!');
+  } catch {
+    window.prompt('Copy and send this invite link:', link);
+  }
+}
+
 async function copyJoinLink() {
   if (!lobby.joinCode) return;
   const link = buildJoinLink(lobby.joinCode, serializeLobbyState(lobby));
@@ -1260,13 +1290,12 @@ async function loadLobbyFromStore(code) {
     return false;
   }
 
-  const stored = await resolveOpenLobby(normalized);
+  const stored = await resolveOpenLobby(normalized, { retryMs: 10000 });
   if (!stored) {
     alert(
       'Lobby not found.\n\n' +
-        '• Use the full join link from the host (Copy link), not just the key\n' +
-        '• Make sure you are on the same website URL as the host\n' +
-        '• The host must have created the lobby recently'
+        'Ask the host to tap **Invite Friend** on their phone and send you that link.\n' +
+        'Do not type the key manually — open the shared link directly.'
     );
     return false;
   }
@@ -1369,7 +1398,7 @@ async function joinWithCodeFromSetup() {
   const rejoin = getRejoinRecord(wallet);
 
   clearJoinCodeFromUrl();
-  clearLobbyBootstrapFromHash();
+  clearLobbyBootstrapFromUrl();
 
   if (isInCurrentLobby()) {
     startLobbySync();
@@ -1476,6 +1505,7 @@ async function openLobby() {
     showScreen('lobby');
     setTxStatus(`Lobby created · ${sig.slice(0, 8)}…`);
     setTimeout(() => setTxStatus(''), 3000);
+    void shareJoinLink();
   } catch {
     resetLobby();
   }

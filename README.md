@@ -27,15 +27,19 @@ Repo: [github.com/chicoded/russ](https://github.com/chicoded/russ)
 
 Every push to `main` redeploys automatically. Your live URL will look like `https://russ-*.vercel.app` (you can add a custom domain in project settings).
 
-### Multiplayer lobbies (required for cross-device join)
+### Multiplayer from different phones
 
-1. In your Vercel project → **Storage** → **Create Database** → **Upstash Redis** → connect to the project
-2. Redeploy — this sets `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` automatically
-3. Host clicks **Copy link** and shares the full URL with friends (not just the 6-character key)
+**Easiest (no setup):** Host taps **Invite Friend** → sends the link → guest opens it on their phone.
 
-Without Redis, lobbies only work in the same browser. The join link still works once across devices by embedding lobby data in the URL.
+**Join by key only (recommended for production):** Free Supabase sync:
 
-> **Note:** All players must use the **same site URL** (e.g. your Vercel link, not `localhost`).
+1. Create a project at [supabase.com](https://supabase.com)
+2. SQL Editor → run `supabase/lobbies.sql`
+3. Settings → API → copy **Project URL** and **anon public** key
+4. Paste into `js/config.js` → `lobbySync` (and add same vars in Vercel → Settings → Environment Variables)
+5. Redeploy
+
+Set `publicSiteUrl` in `config.js` to your Vercel URL so invite links always use the live address.
 
 ## Project structure
 

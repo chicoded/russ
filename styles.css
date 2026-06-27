@@ -567,6 +567,17 @@ body.in-game .game-inline-nav {
   color: var(--success);
 }
 
+.btn-primary-soft {
+  border-color: rgba(224, 32, 32, 0.55);
+  background: rgba(224, 32, 32, 0.12);
+  color: var(--text);
+}
+
+.btn-primary-soft:hover {
+  background: rgba(224, 32, 32, 0.22);
+  border-color: rgba(224, 32, 32, 0.75);
+}
+
 .nav-dropdown-action {
   width: 100%;
   margin-top: 0.75rem;

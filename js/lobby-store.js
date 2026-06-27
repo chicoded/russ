@@ -1,6 +1,8 @@
 /**
- * Lobby persistence — local cache + remote API for cross-device join keys.
+ * Lobby persistence — local cache + Supabase + API for cross-device multiplayer.
  */
+
+import { CONFIG, getPublicSiteOrigin } from './config.js';
 
 const LOBBY_PREFIX = 'rr_open_lobby_';
 const CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -11,6 +13,32 @@ const lobbyBroadcast =
 
 function lobbyKey(code) {
   return `${LOBBY_PREFIX}${code.toUpperCase()}`;
+}
+
+function supabaseConfig() {
+  const url = CONFIG.lobbySync?.supabaseUrl?.trim();
+  const key = CONFIG.lobbySync?.supabaseAnonKey?.trim();
+  return url && key ? { url: url.replace(/\/$/, ''), key } : null;
+}
+
+function supabaseHeaders(key) {
+  return {
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+    'Content-Type': 'application/json',
+    Prefer: 'return=minimal',
+  };
+}
+
+function decodeBase64Url(encoded) {
+  let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = base64.length % 4;
+  if (pad) base64 += '='.repeat(4 - pad);
+  return atob(base64);
+}
+
+function encodeBase64Url(json) {
+  return btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 export function normalizeJoinCode(code) {
@@ -56,15 +84,68 @@ function writeLocalLobby(joinCode, lobbyData) {
   return payload;
 }
 
-async function fetchRemoteLobby(joinCode) {
+async function fetchSupabaseLobby(joinCode) {
+  const sb = supabaseConfig();
+  const code = normalizeJoinCode(joinCode);
+  if (!sb || !code) return null;
+
+  try {
+    const res = await fetch(
+      `${sb.url}/rest/v1/lobbies?code=eq.${encodeURIComponent(code)}&select=payload`,
+      { headers: supabaseHeaders(sb.key), cache: 'no-store' }
+    );
+    if (!res.ok) return null;
+    const rows = await res.json();
+    const payload = rows?.[0]?.payload;
+    return payload?.joinCode ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
+async function pushSupabaseLobby(joinCode, lobbyData) {
+  const sb = supabaseConfig();
+  const code = normalizeJoinCode(joinCode);
+  if (!sb || !code || !lobbyData) return false;
+
+  const payload = { ...lobbyData, joinCode: code, updatedAt: Date.now() };
+  try {
+    const res = await fetch(`${sb.url}/rest/v1/lobbies`, {
+      method: 'POST',
+      headers: { ...supabaseHeaders(sb.key), Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({
+        code,
+        payload,
+        updated_at: new Date().toISOString(),
+      }),
+    });
+    return res.ok || res.status === 409;
+  } catch {
+    return false;
+  }
+}
+
+async function deleteSupabaseLobby(joinCode) {
+  const sb = supabaseConfig();
+  const code = normalizeJoinCode(joinCode);
+  if (!sb || !code) return;
+
+  try {
+    await fetch(`${sb.url}/rest/v1/lobbies?code=eq.${encodeURIComponent(code)}`, {
+      method: 'DELETE',
+      headers: supabaseHeaders(sb.key),
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+async function fetchApiLobby(joinCode) {
   const code = normalizeJoinCode(joinCode);
   if (!code) return null;
 
   try {
-    const res = await fetch(`${LOBBY_API}/${code}`, {
-      method: 'GET',
-      cache: 'no-store',
-    });
+    const res = await fetch(`${LOBBY_API}/${code}`, { method: 'GET', cache: 'no-store' });
     if (res.status === 404) return null;
     if (!res.ok) return null;
     const data = await res.json();
@@ -74,7 +155,7 @@ async function fetchRemoteLobby(joinCode) {
   }
 }
 
-async function pushRemoteLobby(joinCode, lobbyData) {
+async function pushApiLobby(joinCode, lobbyData) {
   const code = normalizeJoinCode(joinCode);
   if (!code || !lobbyData) return false;
 
@@ -90,10 +171,9 @@ async function pushRemoteLobby(joinCode, lobbyData) {
   }
 }
 
-async function deleteRemoteLobby(joinCode) {
+async function deleteApiLobby(joinCode) {
   const code = normalizeJoinCode(joinCode);
   if (!code) return;
-
   try {
     await fetch(`${LOBBY_API}/${code}`, { method: 'DELETE' });
   } catch {
@@ -101,54 +181,100 @@ async function deleteRemoteLobby(joinCode) {
   }
 }
 
-export function getLobbyBootstrapFromHash() {
+async function fetchRemoteLobby(joinCode) {
+  const fromSb = await fetchSupabaseLobby(joinCode);
+  if (fromSb) return fromSb;
+  return fetchApiLobby(joinCode);
+}
+
+async function pushRemoteLobby(joinCode, lobbyData) {
+  const results = await Promise.all([
+    pushSupabaseLobby(joinCode, lobbyData),
+    pushApiLobby(joinCode, lobbyData),
+  ]);
+  return results.some(Boolean);
+}
+
+async function deleteRemoteLobby(joinCode) {
+  await Promise.all([deleteSupabaseLobby(joinCode), deleteApiLobby(joinCode)]);
+}
+
+export function getLobbyBootstrapFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const fromQuery = params.get('d');
+  if (fromQuery) {
+    try {
+      const data = JSON.parse(decodeBase64Url(fromQuery));
+      if (data?.joinCode) return data;
+    } catch {
+      /* try hash fallback */
+    }
+  }
+
   const raw = window.location.hash.replace(/^#/, '');
   if (!raw.startsWith('lobby=')) return null;
-
-  const encoded = raw.slice(6);
   try {
-    const json = atob(encoded.replace(/-/g, '+').replace(/_/g, '/'));
-    const data = JSON.parse(json);
+    const data = JSON.parse(decodeBase64Url(raw.slice(6)));
     return data?.joinCode ? data : null;
   } catch {
     return null;
   }
 }
 
-export function clearLobbyBootstrapFromHash() {
+export function clearLobbyBootstrapFromUrl() {
   const url = new URL(window.location.href);
-  if (!url.hash.startsWith('#lobby=')) return;
-  url.hash = '';
-  window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  let changed = false;
+  if (url.searchParams.has('d')) {
+    url.searchParams.delete('d');
+    changed = true;
+  }
+  if (url.hash.startsWith('#lobby=')) {
+    url.hash = '';
+    changed = true;
+  }
+  if (changed) {
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  }
 }
 
-/** Sync read — local cache only (use resolveOpenLobby for joins). */
+/** Sync read — local cache only. */
 export function loadOpenLobby(joinCode) {
   return readLocalLobby(joinCode);
 }
 
-/** Fetch remote lobby, fall back to local cache, then URL bootstrap. */
-export async function resolveOpenLobby(joinCode) {
+function applyBootstrapIfMatching(code) {
+  const bootstrap = getLobbyBootstrapFromUrl();
+  if (!bootstrap || normalizeJoinCode(bootstrap.joinCode) !== code) return null;
+  writeLocalLobby(code, bootstrap);
+  void pushRemoteLobby(code, bootstrap);
+  return bootstrap;
+}
+
+/** Resolve lobby from URL embed, cloud, local cache, or short poll. */
+export async function resolveOpenLobby(joinCode, { retryMs = 0 } = {}) {
   const code = normalizeJoinCode(joinCode);
   if (!code) return null;
 
-  const remote = await fetchRemoteLobby(code);
-  if (remote) {
-    writeLocalLobby(code, remote);
-    return remote;
-  }
+  const fromUrl = applyBootstrapIfMatching(code);
+  if (fromUrl) return fromUrl;
 
-  const local = readLocalLobby(code);
-  if (local) return local;
+  const deadline = Date.now() + retryMs;
+  do {
+    const remote = await fetchRemoteLobby(code);
+    if (remote) {
+      writeLocalLobby(code, remote);
+      return remote;
+    }
 
-  const bootstrap = getLobbyBootstrapFromHash();
-  if (bootstrap && normalizeJoinCode(bootstrap.joinCode) === code) {
-    writeLocalLobby(code, bootstrap);
-    void pushRemoteLobby(code, bootstrap);
-    return bootstrap;
-  }
+    const local = readLocalLobby(code);
+    if (local) return local;
 
-  return null;
+    if (retryMs > 0 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  } while (Date.now() < deadline);
+
+  return applyBootstrapIfMatching(code);
 }
 
 export function saveOpenLobby(joinCode, lobbyData) {
@@ -164,15 +290,14 @@ export function removeOpenLobby(joinCode) {
 }
 
 export function buildJoinLink(joinCode, lobbySnapshot = null) {
-  const url = new URL(window.location.href);
+  const origin = getPublicSiteOrigin() || window.location.origin;
+  const url = new URL(window.location.pathname || '/', origin);
   url.searchParams.set('join', joinCode.toUpperCase());
   url.hash = '';
 
   if (lobbySnapshot?.joinCode) {
-    const encoded = btoa(JSON.stringify(lobbySnapshot))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
+    const encoded = encodeBase64Url(JSON.stringify(lobbySnapshot));
+    url.searchParams.set('d', encoded);
     url.hash = `lobby=${encoded}`;
   }
 
@@ -189,6 +314,10 @@ export function clearJoinCodeFromUrl() {
   if (!url.searchParams.has('join')) return;
   url.searchParams.delete('join');
   window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+}
+
+export function isOnlineLobbySyncEnabled() {
+  return Boolean(supabaseConfig());
 }
 
 export function serializeLobbyState(lobby) {

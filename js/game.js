@@ -26,12 +26,15 @@ import {
   buildJoinLink,
   clearJoinCodeFromUrl,
   clearLastLobbyForWallet,
+  clearLobbyBootstrapFromHash,
   generateJoinCode,
   getJoinCodeFromUrl,
   getLastLobbyForWallet,
   hydrateLobbyFromStore,
   loadOpenLobby,
+  normalizeJoinCode,
   removeOpenLobby,
+  resolveOpenLobby,
   saveLastLobbyForWallet,
   saveOpenLobby,
   serializeLobbyState,
@@ -198,6 +201,7 @@ export function initGame() {
     switchMultiTab('join');
     const codeInput = $('#join-code');
     if (codeInput) codeInput.value = urlJoinCode;
+    void renderJoinRulesPreview();
   } else {
     updateRejoinHint();
     updateJoinStakeFields();
@@ -234,8 +238,8 @@ function bindSetupEvents() {
   $('#open-lobby-btn').addEventListener('click', openLobby);
   $('#join-with-code-btn').addEventListener('click', joinWithCodeFromSetup);
   $('#join-code')?.addEventListener('input', (e) => {
-    e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
-    renderJoinRulesPreview();
+    e.target.value = normalizeJoinCode(e.target.value);
+    void renderJoinRulesPreview();
   });
 }
 
@@ -671,25 +675,27 @@ function syncHostRulesFromSetup() {
   $('#host-fixed-stake').value = fixedStake;
 }
 
-function renderJoinRulesPreview() {
+async function renderJoinRulesPreview() {
   const preview = $('#join-rules-preview');
   if (!preview) return;
 
-  const code = $('#join-code')?.value.trim().toUpperCase();
-  if (!code || code.length !== 6) {
+  const code = normalizeJoinCode($('#join-code')?.value || '');
+  if (!code) {
     preview.classList.add('hidden');
     preview.innerHTML = '';
     return;
   }
 
-  const stored = loadOpenLobby(code);
+  preview.classList.remove('hidden');
+  preview.innerHTML = '<p class="hint">Looking up lobby…</p>';
+
+  const stored = await resolveOpenLobby(code);
   if (!stored) {
-    preview.classList.remove('hidden');
-    preview.innerHTML = '<p class="hint">Invalid join key.</p>';
+    preview.innerHTML =
+      '<p class="hint">Lobby not found. Ask the host for the <strong>full join link</strong> (not just the key), and make sure you are on the same site URL.</p>';
     return;
   }
 
-  preview.classList.remove('hidden');
   preview.innerHTML = `<h4>Lobby rules</h4><ul>${renderRulesListHtml(stored.rules)}</ul>`;
 }
 
@@ -1226,7 +1232,7 @@ async function copyJoinKey() {
 
 async function copyJoinLink() {
   if (!lobby.joinCode) return;
-  const link = buildJoinLink(lobby.joinCode);
+  const link = buildJoinLink(lobby.joinCode, serializeLobbyState(lobby));
   try {
     await navigator.clipboard.writeText(link);
     flashCopyBtn('#copy-join-link-btn', 'Copied!');
@@ -1247,10 +1253,21 @@ function flashCopyBtn(selector, label) {
   }, 2000);
 }
 
-function loadLobbyFromStore(code) {
-  const stored = loadOpenLobby(code);
+async function loadLobbyFromStore(code) {
+  const normalized = normalizeJoinCode(code);
+  if (!normalized) {
+    alert('Enter a valid 6-character join key (letters A–Z and numbers 2–9).');
+    return false;
+  }
+
+  const stored = await resolveOpenLobby(normalized);
   if (!stored) {
-    alert('Invalid join key. Check the code and try again.');
+    alert(
+      'Lobby not found.\n\n' +
+        '• Use the full join link from the host (Copy link), not just the key\n' +
+        '• Make sure you are on the same website URL as the host\n' +
+        '• The host must have created the lobby recently'
+    );
     return false;
   }
 
@@ -1338,20 +1355,21 @@ async function addPlayerToLobby({ name, wallet, isRejoin = false }) {
 }
 
 async function joinWithCodeFromSetup() {
-  const code = $('#join-code')?.value.trim().toUpperCase();
+  const code = normalizeJoinCode($('#join-code')?.value || '');
   const name = $('#join-setup-name')?.value.trim() || getUsername();
 
-  if (!code || code.length !== 6) {
+  if (!code) {
     alert('Enter the 6-character join key from the host.');
     return;
   }
 
-  if (!loadLobbyFromStore(code)) return;
+  if (!(await loadLobbyFromStore(code))) return;
 
   const wallet = getPublicKeyString();
   const rejoin = getRejoinRecord(wallet);
 
   clearJoinCodeFromUrl();
+  clearLobbyBootstrapFromHash();
 
   if (isInCurrentLobby()) {
     startLobbySync();

@@ -27,7 +27,15 @@ Repo: [github.com/chicoded/russ](https://github.com/chicoded/russ)
 
 Every push to `main` redeploys automatically. Your live URL will look like `https://russ-*.vercel.app` (you can add a custom domain in project settings).
 
-> **Note:** Multiplayer lobby sync uses `localStorage` and `BroadcastChannel`, so it works across tabs on the same browser/device only.
+### Multiplayer lobbies (required for cross-device join)
+
+1. In your Vercel project → **Storage** → **Create Database** → **Upstash Redis** → connect to the project
+2. Redeploy — this sets `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` automatically
+3. Host clicks **Copy link** and shares the full URL with friends (not just the 6-character key)
+
+Without Redis, lobbies only work in the same browser. The join link still works once across devices by embedding lobby data in the URL.
+
+> **Note:** All players must use the **same site URL** (e.g. your Vercel link, not `localhost`).
 
 ## Project structure
 

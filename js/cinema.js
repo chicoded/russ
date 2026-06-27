@@ -2,6 +2,13 @@
  * Shot cinemas — spy interrogation (solo) + slum addict roulette (multi).
  */
 
+import {
+  playCinemaTension,
+  playCinemaAim,
+  playShotResult,
+  playWin,
+} from './audio.js';
+
 function ensureCinemaStyles() {
   if (document.getElementById('cinema-css')) return;
   const link = document.createElement('link');
@@ -120,6 +127,7 @@ export function playShotCinema({ playerName, survived }) {
 
     resetFrame(cinema.querySelector('.cinema-frame'));
     cinema.classList.add('cinema-active', 'phase-tension');
+    playCinemaTension();
 
     const timers = [];
 
@@ -131,12 +139,14 @@ export function playShotCinema({ playerName, survived }) {
       cinema.classList.remove('phase-tension');
       cinema.classList.add('phase-aim');
       subtitle.textContent = '…';
+      playCinemaAim();
     }, 3800);
 
     schedule(timers, () => {
       cinema.classList.remove('phase-aim');
       cinema.classList.add('phase-shot');
       subtitle.textContent = '';
+      playShotResult(survived);
     }, 5200);
 
     schedule(timers, () => {
@@ -222,6 +232,7 @@ export function playGangCinema({
 
     resetFrame(cinema.querySelector('.slum-frame'));
     cinema.classList.add('cinema-active', 'slum-phase-high');
+    playCinemaTension();
 
     const timers = [];
 
@@ -229,12 +240,14 @@ export function playGangCinema({
       subtitle.textContent = fill(pick(SLUM_AIM), { name });
       cinema.classList.remove('slum-phase-high');
       cinema.classList.add('slum-phase-aim');
+      playCinemaAim();
     }, 2200);
 
     schedule(timers, () => {
       subtitle.textContent = '';
       cinema.classList.remove('slum-phase-aim');
       cinema.classList.add('slum-phase-shot');
+      playShotResult(survived);
     }, 4200);
 
     schedule(timers, () => {
@@ -298,6 +311,7 @@ export function playGangWinCinema({ winnerName, potLabel }) {
     cinema.classList.remove('hidden', 'slum-phase-death', 'slum-phase-survive');
     resetFrame(cinema.querySelector('.slum-frame'));
     cinema.classList.add('cinema-active', 'slum-phase-win');
+    playWin();
 
     const timers = [];
 

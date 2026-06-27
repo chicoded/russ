@@ -1,5 +1,18 @@
 import { initUiPolish, initBulletLoadSelectors, refreshGameVisuals, syncCylinderLoadVisuals } from './ui.js';
 import { formatSol, lamportsToSol } from './config.js';
+import {
+  startGameMusic,
+  stopGameMusic,
+  duckMusic,
+  playHammerCock,
+  playCylinderSpin,
+  playShotResult,
+  playWin,
+  playLose,
+  playCashOut,
+  playUiClick,
+  ensureAudioContext,
+} from './audio.js';
 import { addBetRecord, clearBetHistory, renderBetHistory } from './history.js';
 import {
   buildJoinLink,
@@ -382,7 +395,10 @@ function recordGameHistory(winner, message, opts = {}) {
 }
 
 function bindGameEvents() {
-  $('#pull-trigger-btn').addEventListener('click', pullTrigger);
+  $('#pull-trigger-btn').addEventListener('click', () => {
+    void ensureAudioContext();
+    pullTrigger();
+  });
   $('#cash-out-btn').addEventListener('click', cashOut);
   $('#play-again-btn').addEventListener('click', () => {
     if (isMultiGameInProgress()) {
@@ -1884,6 +1900,8 @@ function beginGame(message) {
   finishTurn();
   setMessage(message);
   refreshWalletUI();
+  void ensureAudioContext();
+  startGameMusic();
 }
 
 function loadCylinder() {
@@ -1908,6 +1926,7 @@ function shuffle(arr) {
 function spinCylinder() {
   const cylinderEl = $('#cylinder');
   cylinderEl.classList.add('spinning');
+  playCylinderSpin();
   state.currentChamber = Math.floor(Math.random() * CHAMBERS);
   if (state.mode === 'multi') persistMultiGameState();
   setTimeout(() => cylinderEl.classList.remove('spinning'), 1200);
@@ -1966,6 +1985,7 @@ function pullTrigger() {
 
   const hammer = $('#hammer');
   hammer.classList.add('cocked');
+  playHammerCock();
   state.shotId += 1;
   const shotId = state.shotId;
 
@@ -1985,6 +2005,7 @@ function pullTrigger() {
     const eliminatedBefore = state.players.filter((p) => !p.alive).length;
 
     if (state.mode === 'multi') {
+      duckMusic(true);
       const { playGangCinema } = await getCinema();
       await playGangCinema({
         playerName: player.name,
@@ -1994,9 +2015,12 @@ function pullTrigger() {
         totalPlayers: state.players.length,
       });
     } else {
+      duckMusic(true);
       const { playShotCinema } = await getCinema();
       await playShotCinema({ playerName: player.name, survived: !isBullet });
     }
+
+    duckMusic(false);
 
     hammer.classList.remove('fired');
 
@@ -2150,6 +2174,8 @@ async function cashOut() {
   if (state.isProcessing || state.gameOver || state.mode !== 'single') return;
   if (state.survives === 0) return;
 
+  playCashOut();
+
   const player = getCurrentPlayer();
   const profit = getProfit();
   const payout = getCashOutTotal();
@@ -2196,6 +2222,10 @@ function finishTurn() {
 function endGame(winner, message) {
   state.gameOver = true;
   state.isProcessing = false;
+  stopGameMusic();
+
+  if (winner) playWin();
+  else if (state.mode === 'single') playLose();
 
   if (state.mode === 'multi') {
     state.winnerWallet = winner?.wallet || null;
@@ -2368,6 +2398,10 @@ function showScreen(name) {
   else if (name === 'game') gameScreen.classList.add('active');
   else if (name === 'result') resultScreen.classList.add('active');
   else if (name === 'history') historyScreen?.classList.add('active');
+
+  if (name === 'setup') {
+    stopGameMusic();
+  }
 
   const toolbar = document.getElementById('screen-toolbar');
   const menuToggle = document.getElementById('nav-menu-toggle');

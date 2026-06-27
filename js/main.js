@@ -7,6 +7,7 @@ import {
   airdropPracticeSol,
 } from './wallet.js';
 import { CONFIG } from './config.js';
+import { initAudio, ensureAudioContext } from './audio.js';
 
 let gameModule = null;
 let gameInitPromise = null;
@@ -124,6 +125,7 @@ async function handleLogin() {
   setLoginLoading(true, 'Signing in…');
 
   try {
+    await ensureAudioContext();
     const { isNew, publicKey } = login(name);
     await ensureGameInit();
     showApp();
@@ -167,6 +169,7 @@ async function handleLogout() {
 }
 
 async function boot() {
+  initAudio();
   document.getElementById('login-btn')?.addEventListener('click', handleLogin);
   document.getElementById('login-username')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') handleLogin();

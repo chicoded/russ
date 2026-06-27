@@ -10,6 +10,12 @@ Browser-based Russian Roulette game with mock Solana wallet, single-player and m
    ```
 2. Open [http://localhost:8080](http://localhost:8080)
 
+## Audio
+
+- **Music** — tense action loop during active gameplay (toggle in top bar)
+- **SFX** — hammer, cylinder spin, gunshot, empty click, win/lose stingers, cinema cues
+- Preferences saved in browser localStorage
+
 ## Host on GitHub Pages
 
 This repo is a static site — no build step required.

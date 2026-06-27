@@ -14,6 +14,16 @@
 
   <main class="app">
     <div class="app-header-sticky" id="app-header-sticky">
+    <div class="audio-bar" aria-label="Audio settings">
+      <button type="button" id="toggle-music-btn" class="audio-toggle" aria-pressed="true" title="Background music">
+        <span class="audio-toggle-icon audio-icon-music" aria-hidden="true"></span>
+        <span class="audio-toggle-text">Music</span>
+      </button>
+      <button type="button" id="toggle-sfx-btn" class="audio-toggle" aria-pressed="true" title="Sound effects">
+        <span class="audio-toggle-icon audio-icon-sfx" aria-hidden="true"></span>
+        <span class="audio-toggle-text">SFX</span>
+      </button>
+    </div>
     <nav id="top-nav" class="top-nav hidden">
       <button type="button" id="nav-menu-toggle" class="nav-menu-toggle hidden" aria-label="Open menu" title="Main menu">
         <span class="nav-menu-icon" aria-hidden="true"></span>

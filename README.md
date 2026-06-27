@@ -16,19 +16,16 @@ Browser-based Russian Roulette game with mock Solana wallet, single-player and m
 - **SFX** — hammer, cylinder spin, gunshot, empty click, win/lose stingers, cinema cues
 - Preferences saved in browser localStorage
 
-## Host on GitHub Pages
+## Host on Vercel
 
-**Live URL (after enabling Pages):** [https://chicoded.github.io/russ/](https://chicoded.github.io/russ/)
+Repo: [github.com/chicoded/russ](https://github.com/chicoded/russ)
 
-Code is pushed to [github.com/chicoded/russ](https://github.com/chicoded/russ). Enable hosting once:
+1. Sign in at **[vercel.com](https://vercel.com)** (GitHub login works)
+2. **Add New → Project** → import **chicoded/russ**
+3. Leave defaults — **Framework Preset: Other**, no build command, output is the repo root
+4. Click **Deploy**
 
-1. Open **[github.com/chicoded/russ/settings/pages](https://github.com/chicoded/russ/settings/pages)**
-2. **Build and deployment → Source:** choose **Deploy from a branch**
-3. **Branch:** `main` · **Folder:** `/ (root)`
-4. Click **Save**
-5. Wait 1–2 minutes, then open [https://chicoded.github.io/russ/](https://chicoded.github.io/russ/)
-
-Alternatively, set Source to **GitHub Actions** — the repo includes a `Deploy to GitHub Pages` workflow that runs on every push to `main`.
+Every push to `main` redeploys automatically. Your live URL will look like `https://russ-*.vercel.app` (you can add a custom domain in project settings).
 
 > **Note:** Multiplayer lobby sync uses `localStorage` and `BroadcastChannel`, so it works across tabs on the same browser/device only.
 

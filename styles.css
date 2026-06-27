@@ -209,11 +209,95 @@ body {
 }
 
 .app-header-sticky {
-  position: sticky;
-  top: 0;
-  z-index: 200;
-  margin: -0.5rem -0.25rem 1rem;
+  position: relative;
+  z-index: 10;
+  margin: 0 0 1rem;
   padding-top: env(safe-area-inset-top, 0);
+}
+
+body.in-game .header {
+  display: none;
+}
+
+body.in-game .app-header-sticky {
+  margin-bottom: 0.65rem;
+}
+
+body.in-game .audio-bar {
+  position: fixed;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  right: max(1rem, env(safe-area-inset-right));
+  z-index: 150;
+  margin: 0;
+  padding: 0;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+body.in-game .top-nav {
+  margin-bottom: 0;
+}
+
+body.in-game #game-screen {
+  padding-top: 0.25rem;
+}
+
+body.in-game .game-layout {
+  padding-bottom: 4.5rem;
+}
+
+.game-inline-nav {
+  display: none;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+  padding: 0.5rem 0.65rem;
+  background: rgba(18, 18, 22, 0.96);
+  border: 1px solid var(--border);
+  border-left: 3px solid rgba(212, 168, 83, 0.55);
+  border-radius: var(--radius);
+}
+
+body.in-game .game-inline-nav {
+  display: flex;
+}
+
+.game-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.75rem;
+  background: linear-gradient(180deg, #e82828 0%, #b01010 100%);
+  border: 1px solid rgba(255, 80, 80, 0.25);
+  border-radius: var(--radius);
+  color: white;
+  font-family: var(--font-contract);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.game-inline-ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.game-inline-ghost:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.game-inline-crumb {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-contract);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .top-nav {
@@ -2489,6 +2573,22 @@ body {
 
   .toolbar-menu-btn,
   .toolbar-ghost {
+    flex: 1;
+    justify-content: center;
+  }
+
+  body.in-game .game-inline-nav {
+    flex-wrap: wrap;
+  }
+
+  body.in-game .game-inline-crumb {
+    order: 3;
+    flex: 1 1 100%;
+    text-align: left;
+    padding-top: 0.15rem;
+  }
+
+  body.in-game .game-inline-btn {
     flex: 1;
     justify-content: center;
   }

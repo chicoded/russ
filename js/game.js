@@ -265,6 +265,8 @@ function bindHistoryEvents() {
   $('#toolbar-menu-btn')?.addEventListener('click', () => void goToMainMenu());
   $('#toolbar-history-btn')?.addEventListener('click', openBetHistory);
   $('#nav-menu-toggle')?.addEventListener('click', () => void goToMainMenu());
+  $('#game-inline-menu')?.addEventListener('click', () => void goToMainMenu());
+  $('#game-inline-history')?.addEventListener('click', openBetHistory);
   $('#history-back-btn')?.addEventListener('click', () => {
     void goToMainMenu();
   });
@@ -2405,9 +2407,15 @@ function showScreen(name) {
 
   const toolbar = document.getElementById('screen-toolbar');
   const menuToggle = document.getElementById('nav-menu-toggle');
-  const showToolbar = ['game', 'lobby', 'result', 'history'].includes(name);
+  const showToolbar = ['lobby', 'result', 'history'].includes(name);
   toolbar?.classList.toggle('hidden', !showToolbar);
   menuToggle?.classList.toggle('hidden', name !== 'game');
+
+  document.body.classList.toggle('in-game', name === 'game');
+
+  if (name === 'game') {
+    window.scrollTo(0, 0);
+  }
 
   const crumbs = {
     game: 'Active Mission',

@@ -18,15 +18,19 @@ Browser-based Russian Roulette game with mock Solana wallet, single-player and m
 
 ## Host on GitHub Pages
 
-This repo is a static site — no build step required.
+**Live URL (after enabling Pages):** [https://chicoded.github.io/russ/](https://chicoded.github.io/russ/)
 
-1. Push this repo to GitHub ([chicoded/russ](https://github.com/chicoded/russ)).
-2. On GitHub: **Settings → Pages**
-3. **Source:** Deploy from branch
-4. **Branch:** `main` / **Folder:** `/ (root)`
-5. Save — your site will be at `https://chicoded.github.io/russ/`
+Code is pushed to [github.com/chicoded/russ](https://github.com/chicoded/russ). Enable hosting once:
 
-> **Note:** Multiplayer lobby sync uses `localStorage` and `BroadcastChannel`, so it works across tabs on the same browser/device only. GitHub Pages hosting does not change that.
+1. Open **[github.com/chicoded/russ/settings/pages](https://github.com/chicoded/russ/settings/pages)**
+2. **Build and deployment → Source:** choose **Deploy from a branch**
+3. **Branch:** `main` · **Folder:** `/ (root)`
+4. Click **Save**
+5. Wait 1–2 minutes, then open [https://chicoded.github.io/russ/](https://chicoded.github.io/russ/)
+
+Alternatively, set Source to **GitHub Actions** — the repo includes a `Deploy to GitHub Pages` workflow that runs on every push to `main`.
+
+> **Note:** Multiplayer lobby sync uses `localStorage` and `BroadcastChannel`, so it works across tabs on the same browser/device only.
 
 ## Project structure
 

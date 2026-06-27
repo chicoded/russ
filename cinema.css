@@ -1,0 +1,1335 @@
+/* Cinematic interrogation — film noir / spy thriller */
+
+.shot-cinema {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+.shot-cinema.cinema-active {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.cinema-letterbox {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+}
+
+.letterbox-bar {
+  flex: 0 0 11vh;
+  background: #000;
+  z-index: 50;
+}
+
+.cinema-frame {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  background: #1a1c20;
+  transform: scale(1);
+  filter: saturate(0.72) contrast(1.08) brightness(1.18);
+}
+
+/* Environment */
+.cinema-wall {
+  position: absolute;
+  inset: 0 0 18% 0;
+  background:
+    radial-gradient(ellipse 55% 70% at 50% 8%, rgba(255, 210, 140, 0.28) 0%, transparent 55%),
+    linear-gradient(180deg, #2a2e34 0%, #22262a 45%, #1a1c20 100%);
+}
+
+.cinema-wall::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(90deg, transparent, transparent 38px, rgba(0, 0, 0, 0.2) 38px, rgba(0, 0, 0, 0.2) 40px),
+    repeating-linear-gradient(0deg, transparent, transparent 22px, rgba(0, 0, 0, 0.15) 22px, rgba(0, 0, 0, 0.15) 24px);
+  opacity: 0.35;
+}
+
+.cinema-wall::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.45) 100%);
+}
+
+.cinema-floor {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 22%;
+  background: linear-gradient(180deg, #1e2024 0%, #141618 100%);
+}
+
+.cinema-floor::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -10%;
+  right: -10%;
+  height: 1px;
+  background: rgba(255, 220, 160, 0.08);
+  box-shadow: 0 0 30px rgba(255, 200, 120, 0.06);
+}
+
+.cinema-shadow-pool {
+  position: absolute;
+  bottom: 16%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 180px;
+  height: 40px;
+  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.55) 0%, transparent 70%);
+  filter: blur(8px);
+}
+
+.cinema-bulb-cord {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 12%;
+  background: linear-gradient(180deg, #1a1a1a, #333);
+  transform: translateX(-50%);
+  z-index: 4;
+}
+
+.cinema-bulb {
+  position: absolute;
+  top: 11%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 28px;
+  background: radial-gradient(circle at 40% 30%, #fff8e8 0%, #e8c878 35%, #a08040 100%);
+  border-radius: 50% 50% 45% 45%;
+  box-shadow:
+    0 0 50px rgba(255, 210, 120, 0.7),
+    0 0 140px rgba(255, 180, 80, 0.4),
+    0 0 220px rgba(255, 160, 60, 0.22);
+  z-index: 5;
+  animation: bulbFlicker 4s ease-in-out infinite;
+}
+
+.cinema-light-cone {
+  position: absolute;
+  top: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 320px;
+  height: 70%;
+  background: radial-gradient(ellipse at center top, rgba(255, 220, 160, 0.28) 0%, transparent 68%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.cinema-haze {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  opacity: 0.22;
+}
+
+.cinema-haze.haze-1 {
+  background: radial-gradient(ellipse 80% 40% at 30% 60%, rgba(180, 190, 200, 0.08) 0%, transparent 60%);
+  animation: hazeDrift 8s ease-in-out infinite alternate;
+}
+
+.cinema-haze.haze-2 {
+  background: radial-gradient(ellipse 60% 50% at 70% 40%, rgba(200, 180, 160, 0.06) 0%, transparent 55%);
+  animation: hazeDrift 11s ease-in-out infinite alternate-reverse;
+}
+
+/* HUD / captions */
+.cinema-timecode {
+  position: absolute;
+  top: 1.2rem;
+  left: 1.5rem;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.22em;
+  color: rgba(255, 255, 255, 0.55);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.rec-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8b2020;
+  box-shadow: 0 0 8px rgba(180, 40, 40, 0.8);
+  animation: recBlink 1.2s ease-in-out infinite;
+}
+
+.cinema-caption {
+  position: absolute;
+  top: 1.2rem;
+  right: 1.5rem;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.48);
+  z-index: 30;
+  text-transform: uppercase;
+}
+
+.cinema-subtitle {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(90%, 640px);
+  text-align: center;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: clamp(1rem, 2.8vw, 1.35rem);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: rgba(255, 248, 235, 0.82);
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9);
+  z-index: 30;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.shot-cinema.phase-tension .cinema-subtitle,
+.shot-cinema.phase-aim .cinema-subtitle,
+.shot-cinema.phase-survive .cinema-subtitle {
+  opacity: 1;
+}
+
+/* Metal interrogation chair */
+.cinema-chair-wrap {
+  position: absolute;
+  bottom: 17%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 110px;
+  height: 95px;
+  z-index: 7;
+}
+
+.cinema-chair-metal {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, #4a4642 0%, #322e2a 50%, #3e3a36 100%);
+  border: 1px solid #2a2824;
+  border-radius: 4px 4px 2px 2px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.cinema-chair-metal::before {
+  content: '';
+  position: absolute;
+  top: -48px;
+  left: 8px;
+  right: 8px;
+  height: 52px;
+  background: linear-gradient(180deg, #222018 0%, #141210 100%);
+  border: 1px solid #0a0908;
+  border-radius: 3px;
+}
+
+.cinema-chair-metal::after {
+  content: '';
+  position: absolute;
+  top: -44px;
+  left: 4px;
+  right: 4px;
+  height: 6px;
+  background: repeating-linear-gradient(90deg, #333 0, #333 4px, #1a1a1a 4px, #1a1a1a 8px);
+  border-radius: 2px;
+}
+
+/* SVG figures */
+.cinema-prisoner-svg {
+  position: absolute;
+  bottom: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 130px;
+  height: auto;
+  z-index: 10;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.8));
+}
+
+.cinema-prisoner-svg path,
+.cinema-prisoner-svg ellipse {
+  fill: url(#prisonerRim);
+}
+
+.cinema-prisoner-svg .prisoner-rope {
+  fill: none;
+  stroke: rgba(80, 60, 40, 0.6);
+  stroke-width: 2;
+}
+
+.cinema-soldier-svg {
+  position: absolute;
+  bottom: 16%;
+  right: 14%;
+  width: 155px;
+  height: auto;
+  z-index: 12;
+  opacity: 0;
+  transform: translateX(60px);
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.85));
+  transition: transform 1.4s cubic-bezier(0.22, 1, 0.36, 1), opacity 1s ease;
+}
+
+.cinema-soldier-svg .soldier-coat { fill: #3a4238; }
+.cinema-soldier-svg .soldier-head { fill: #4a4038; }
+.cinema-soldier-svg .soldier-hat { fill: #2a3028; }
+.cinema-soldier-svg .soldier-collar { fill: #5a5448; }
+
+.soldier-arm-gun {
+  transform-origin: 28px 92px;
+  transform-box: fill-box;
+  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.soldier-arm-gun path,
+.soldier-arm-gun rect,
+.soldier-arm-gun circle:not(.muzzle-flash) {
+  fill: #2a2a2a;
+}
+
+.soldier-arm-gun circle:not(.muzzle-flash):last-of-type {
+  fill: #3a3430;
+}
+
+.muzzle-flash {
+  fill: #fff;
+  opacity: 0;
+  transform-origin: -6px 92px;
+  transform: scale(0);
+}
+
+.gun-smoke {
+  fill: rgba(180, 180, 180, 0.3);
+  opacity: 0;
+  transform-origin: -12px 91px;
+  transform: scale(0);
+}
+
+/* Blood on wall — realistic spray */
+.cinema-blood-wall {
+  position: absolute;
+  top: 22%;
+  left: 38%;
+  width: 140px;
+  height: 100px;
+  opacity: 0;
+  z-index: 8;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 50% 40% at 45% 55%, rgba(90, 8, 8, 0.85) 0%, transparent 70%),
+    radial-gradient(ellipse 25% 20% at 70% 40%, rgba(70, 6, 6, 0.7) 0%, transparent 70%),
+    radial-gradient(ellipse 18% 15% at 25% 65%, rgba(60, 5, 5, 0.6) 0%, transparent 70%),
+    radial-gradient(ellipse 8% 6% at 55% 30%, rgba(80, 10, 10, 0.5) 0%, transparent 70%);
+  filter: blur(0.5px);
+  transform: scale(0.3);
+}
+
+.cinema-blood-mist {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 42% 38%, rgba(120, 10, 10, 0.25) 0%, transparent 35%);
+  opacity: 0;
+  z-index: 14;
+  pointer-events: none;
+}
+
+.cinema-breath {
+  position: absolute;
+  bottom: 38%;
+  left: 52%;
+  width: 40px;
+  height: 20px;
+  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.12) 0%, transparent 70%);
+  filter: blur(6px);
+  opacity: 0;
+  z-index: 11;
+  transform: translateX(-50%) scale(0.5);
+}
+
+.cinema-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  z-index: 25;
+  pointer-events: none;
+}
+
+.cinema-red-flash {
+  position: absolute;
+  inset: 0;
+  background: rgba(40, 0, 0, 0.55);
+  opacity: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.cinema-vignette-heavy {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, 0.42) 100%);
+  z-index: 22;
+  pointer-events: none;
+}
+
+.cinema-grain {
+  position: absolute;
+  inset: -50%;
+  z-index: 35;
+  pointer-events: none;
+  opacity: 0.1;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  animation: grainShift 0.12s steps(2) infinite;
+  mix-blend-mode: overlay;
+}
+
+/* Result — subtle film end card */
+.cinema-result {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.cinema-result-line {
+  width: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.35);
+  margin-bottom: 1.2rem;
+}
+
+.cinema-result-text {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: clamp(1.4rem, 4vw, 2rem);
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.cinema-result-text.survive {
+  color: rgba(220, 235, 220, 0.75);
+  text-shadow: 0 0 30px rgba(100, 140, 100, 0.3);
+}
+
+.cinema-result-text.death {
+  color: rgba(200, 160, 160, 0.7);
+  text-shadow: 0 0 30px rgba(120, 40, 40, 0.4);
+}
+
+/* ── Phases ── */
+
+.shot-cinema.phase-tension .cinema-frame {
+  animation: cameraPush 3.5s ease-out forwards;
+}
+
+.shot-cinema.phase-tension .cinema-soldier-svg {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.shot-cinema.phase-tension .cinema-prisoner-svg {
+  animation: prisonerTremble 0.12s ease-in-out infinite alternate;
+}
+
+.shot-cinema.phase-aim .cinema-prisoner-svg {
+  animation: none;
+}
+
+.shot-cinema.phase-aim .soldier-arm-gun {
+  transform: rotate(-8deg) translate(-8px, -2px);
+}
+
+.shot-cinema.phase-aim .cinema-frame {
+  animation: cameraAim 1.2s ease forwards;
+}
+
+.shot-cinema.phase-shot .muzzle-flash {
+  animation: muzzleFlashReal 0.18s ease forwards;
+}
+
+.shot-cinema.phase-shot .gun-smoke {
+  animation: gunSmoke 1.8s ease 0.1s forwards;
+}
+
+.shot-cinema.phase-shot .cinema-flash {
+  animation: whiteFlashReal 0.22s ease forwards;
+}
+
+.shot-cinema.phase-shot .cinema-frame {
+  animation: recoilShake 0.35s ease;
+}
+
+/* Survive */
+.shot-cinema.phase-survive .cinema-prisoner-svg {
+  animation: surviveExhale 2s ease forwards;
+}
+
+.shot-cinema.phase-survive .cinema-breath {
+  animation: breathMist 2.2s ease 0.4s forwards;
+}
+
+.shot-cinema.phase-survive .cinema-result {
+  opacity: 1;
+}
+
+.shot-cinema.phase-survive .cinema-result-line {
+  animation: lineDraw 1s ease 0.8s forwards;
+}
+
+.shot-cinema.phase-survive .cinema-result-text.survive:not(.hidden) {
+  animation: resultFadeIn 1.2s ease 1.2s forwards;
+}
+
+.shot-cinema.phase-survive .cinema-frame {
+  filter: saturate(0.65) contrast(1.05) brightness(1.12);
+}
+
+/* Death */
+.shot-cinema.phase-death .cinema-prisoner-svg {
+  animation: headshotSlump 0.7s ease 0.05s forwards;
+}
+
+.shot-cinema.phase-death .cinema-prisoner-svg .blood-head {
+  animation: bloodReveal 0.5s ease 0.15s forwards;
+}
+
+.shot-cinema.phase-death .cinema-blood-wall {
+  animation: bloodWallSplatter 0.6s ease 0.1s forwards;
+}
+
+.shot-cinema.phase-death .cinema-blood-mist {
+  animation: bloodMistFade 1.5s ease 0.05s forwards;
+}
+
+.shot-cinema.phase-death .cinema-red-flash {
+  animation: redFlashReal 1.2s ease forwards;
+}
+
+.shot-cinema.phase-death .cinema-frame {
+  animation: deathShakeReal 0.5s ease, fadeToBlack 2s ease 1s forwards;
+}
+
+.shot-cinema.phase-death .cinema-result {
+  opacity: 1;
+}
+
+.shot-cinema.phase-death .cinema-result-line {
+  animation: lineDraw 0.8s ease 1.4s forwards;
+}
+
+.shot-cinema.phase-death .cinema-result-text.death:not(.hidden) {
+  animation: resultFadeIn 1.4s ease 1.8s forwards;
+}
+
+/* ── Keyframes ── */
+
+@keyframes bulbFlicker {
+  0%, 100% { opacity: 1; filter: brightness(1); }
+  42% { opacity: 0.92; filter: brightness(0.88); }
+  44% { opacity: 1; filter: brightness(1.05); }
+  78% { opacity: 0.95; filter: brightness(0.92); }
+}
+
+@keyframes recBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes hazeDrift {
+  from { transform: translateX(-3%) translateY(0); }
+  to { transform: translateX(3%) translateY(-2%); }
+}
+
+@keyframes grainShift {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(-3%, -2%); }
+}
+
+@keyframes cameraPush {
+  from { transform: scale(1); }
+  to { transform: scale(1.06); }
+}
+
+@keyframes cameraAim {
+  from { transform: scale(1.06); }
+  to { transform: scale(1.1) translateY(1%); }
+}
+
+@keyframes prisonerTremble {
+  from { transform: translateX(-50%) translateX(-1px); }
+  to { transform: translateX(-50%) translateX(1px); }
+}
+
+@keyframes muzzleFlashReal {
+  0% { opacity: 0; transform: scale(0); }
+  15% { opacity: 1; transform: scale(1.4); }
+  50% { opacity: 0.6; transform: scale(0.9); }
+  100% { opacity: 0; transform: scale(0.3); }
+}
+
+@keyframes gunSmoke {
+  0% { opacity: 0; transform: scale(0.2); }
+  25% { opacity: 0.45; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.6) translateX(-8px); }
+}
+
+@keyframes whiteFlashReal {
+  0% { opacity: 0.75; }
+  100% { opacity: 0; }
+}
+
+@keyframes recoilShake {
+  0%, 100% { transform: scale(1.1) translate(0, 0); }
+  20% { transform: scale(1.1) translate(-4px, 1px); }
+  40% { transform: scale(1.1) translate(3px, -1px); }
+  60% { transform: scale(1.1) translate(-2px, 0); }
+}
+
+@keyframes surviveExhale {
+  0% { transform: translateX(-50%) translateY(0); }
+  30% { transform: translateX(-50%) translateY(4px); }
+  60% { transform: translateX(-50%) translateY(2px); }
+  100% { transform: translateX(-50%) translateY(3px); }
+}
+
+@keyframes breathMist {
+  0% { opacity: 0; transform: translateX(-50%) scale(0.3); }
+  25% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+  100% { opacity: 0; transform: translateX(-30%) scale(1.4); }
+}
+
+@keyframes headshotSlump {
+  0% { transform: translateX(-50%) rotate(0); }
+  15% { transform: translateX(-48%) rotate(-12deg) translateY(-6px); }
+  40% { transform: translateX(-52%) rotate(8deg) translateY(10px); }
+  100% { transform: translateX(-50%) rotate(15deg) translateY(18px); opacity: 0.85; }
+}
+
+@keyframes bloodReveal {
+  to { opacity: 0.9; }
+}
+
+@keyframes bloodWallSplatter {
+  0% { opacity: 0; transform: scale(0.2); }
+  30% { opacity: 0.95; transform: scale(1.05); }
+  100% { opacity: 0.85; transform: scale(1); }
+}
+
+@keyframes bloodMistFade {
+  0% { opacity: 0.6; }
+  100% { opacity: 0.15; }
+}
+
+@keyframes redFlashReal {
+  0% { opacity: 0.5; }
+  100% { opacity: 0; }
+}
+
+@keyframes deathShakeReal {
+  0%, 100% { transform: scale(1.1) translate(0); }
+  15% { transform: scale(1.1) translate(-8px, 2px); }
+  30% { transform: scale(1.1) translate(6px, -2px); }
+  45% { transform: scale(1.1) translate(-4px, 1px); }
+}
+
+@keyframes fadeToBlack {
+  to { filter: saturate(0.35) contrast(1.1) brightness(0.62); }
+}
+
+@keyframes lineDraw {
+  to { width: 80px; }
+}
+
+@keyframes resultFadeIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Slum cinema (multiplayer) — homeless addict alley roulette ── */
+
+.slum-cinema .slum-frame {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  background: #1a1814;
+  filter: saturate(0.75) contrast(1.08) brightness(1.12);
+}
+
+.slum-sky {
+  position: absolute;
+  inset: 0 0 55% 0;
+  background: linear-gradient(180deg, #1a1c22 0%, #2a2420 40%, #3a3228 100%);
+}
+
+.slum-alley-wall {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 45% at 75% 25%, rgba(255, 140, 50, 0.12) 0%, transparent 50%),
+    linear-gradient(180deg, #3a342c 0%, #2a2620 35%, #1e1a16 70%, #141210 100%);
+}
+
+.slum-alley-wall::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(90deg, transparent, transparent 42px, rgba(0, 0, 0, 0.22) 42px, rgba(0, 0, 0, 0.22) 44px),
+    repeating-linear-gradient(0deg, transparent, transparent 18px, rgba(0, 0, 0, 0.14) 18px, rgba(0, 0, 0, 0.14) 20px);
+  opacity: 0.5;
+}
+
+.slum-graffiti {
+  position: absolute;
+  top: 28%;
+  right: 12%;
+  font-family: 'Outfit', sans-serif;
+  font-size: clamp(1.4rem, 4vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: rgba(180, 40, 40, 0.35);
+  transform: rotate(-8deg);
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.slum-chain-fence {
+  position: absolute;
+  top: 18%;
+  left: 0;
+  right: 0;
+  height: 35%;
+  background:
+    repeating-linear-gradient(90deg, transparent 0, transparent 8px, rgba(60, 55, 48, 0.6) 8px, rgba(60, 55, 48, 0.6) 10px),
+    repeating-linear-gradient(0deg, transparent 0, transparent 8px, rgba(60, 55, 48, 0.5) 8px, rgba(60, 55, 48, 0.5) 10px);
+  opacity: 0.35;
+  z-index: 2;
+}
+
+.slum-puddle {
+  position: absolute;
+  bottom: 14%;
+  left: 15%;
+  width: 120px;
+  height: 28px;
+  background: radial-gradient(ellipse, rgba(80, 90, 100, 0.35) 0%, transparent 70%);
+  border-radius: 50%;
+  filter: blur(2px);
+  z-index: 4;
+}
+
+.slum-trash {
+  position: absolute;
+  bottom: 16%;
+  background: linear-gradient(145deg, #2a2824, #1a1816);
+  border-radius: 4px;
+  z-index: 5;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.slum-trash-1 {
+  left: 6%;
+  width: 36px;
+  height: 44px;
+  transform: rotate(-6deg);
+}
+
+.slum-trash-2 {
+  right: 8%;
+  width: 28px;
+  height: 52px;
+  transform: rotate(8deg);
+}
+
+.slum-trash::after {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 4px;
+  right: 4px;
+  height: 10px;
+  background: #1e1c1a;
+  border-radius: 2px 2px 0 0;
+}
+
+.slum-cardboard {
+  position: absolute;
+  bottom: 18%;
+  right: 18%;
+  width: 90px;
+  height: 55px;
+  background: linear-gradient(135deg, #6a5a42 0%, #4a3e30 50%, #3a3228 100%);
+  transform: rotate(12deg) skewX(-5deg);
+  z-index: 4;
+  box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+.slum-cardboard::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border: 1px dashed rgba(0, 0, 0, 0.25);
+}
+
+.slum-fire-barrel {
+  position: absolute;
+  bottom: 20%;
+  left: 10%;
+  width: 32px;
+  height: 38px;
+  background: linear-gradient(90deg, #2a2824, #3a3630, #2a2824);
+  border-radius: 2px;
+  z-index: 5;
+}
+
+.slum-fire-barrel::before {
+  content: '';
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 22px;
+  background: radial-gradient(ellipse at bottom, rgba(255, 120, 40, 0.7) 0%, rgba(255, 60, 20, 0.3) 50%, transparent 70%);
+  animation: slumFireFlicker 0.4s ease-in-out infinite alternate;
+}
+
+.slum-streetlight-cord {
+  position: absolute;
+  top: 0;
+  right: 22%;
+  width: 2px;
+  height: 10%;
+  background: #2a2a2a;
+  z-index: 6;
+}
+
+.slum-streetlight {
+  position: absolute;
+  top: 9%;
+  right: 20%;
+  width: 20px;
+  height: 26px;
+  background: radial-gradient(circle at 40% 30%, #fff4d8 0%, #e8b860 45%, #806020 100%);
+  border-radius: 50% 50% 40% 40%;
+  box-shadow:
+    0 0 40px rgba(255, 180, 80, 0.55),
+    0 0 100px rgba(255, 140, 50, 0.25);
+  z-index: 7;
+  animation: bulbFlicker 3.5s ease-in-out infinite;
+}
+
+.slum-light-pool {
+  position: absolute;
+  top: 12%;
+  right: 10%;
+  width: 200px;
+  height: 55%;
+  background: radial-gradient(ellipse at top right, rgba(255, 180, 90, 0.2) 0%, transparent 65%);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.slum-haze {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 50% at 50% 80%, rgba(120, 100, 80, 0.12) 0%, transparent 60%);
+  z-index: 8;
+  pointer-events: none;
+  opacity: 0.4;
+  animation: hazeDrift 10s ease-in-out infinite alternate;
+}
+
+.slum-chair-wrap {
+  position: absolute;
+  bottom: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100px;
+  height: 88px;
+  z-index: 9;
+}
+
+.slum-chair {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #4a4038 0%, #2a2420 50%, #3a3228 100%);
+  border: 1px solid #1a1612;
+  border-radius: 3px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+}
+
+.slum-chair::before {
+  content: '';
+  position: absolute;
+  top: -42px;
+  left: 6px;
+  right: 6px;
+  height: 46px;
+  background: linear-gradient(180deg, #3a342c 0%, #221e1a 100%);
+  border: 1px solid #1a1612;
+  border-radius: 2px;
+}
+
+.slum-chair::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: -6px;
+  right: -6px;
+  height: 6px;
+  background: #1a1612;
+  border-radius: 2px;
+}
+
+.slum-works {
+  position: absolute;
+  bottom: 14%;
+  left: 28%;
+  width: 70px;
+  height: 40px;
+  z-index: 11;
+}
+
+.slum-spoon {
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  width: 22px;
+  height: 6px;
+  background: #8a8a8a;
+  border-radius: 0 3px 3px 0;
+  transform: rotate(-15deg);
+}
+
+.slum-spoon::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: -4px;
+  width: 12px;
+  height: 14px;
+  background: #7a7a7a;
+  border-radius: 50% 50% 40% 40%;
+}
+
+.slum-lighter {
+  position: absolute;
+  bottom: 8px;
+  left: 28px;
+  width: 10px;
+  height: 16px;
+  background: linear-gradient(180deg, #c03030, #801818);
+  border-radius: 2px;
+}
+
+.slum-syringe {
+  position: absolute;
+  bottom: 2px;
+  right: 8px;
+  width: 4px;
+  height: 28px;
+  background: linear-gradient(180deg, #aaa, #666);
+  transform: rotate(25deg);
+}
+
+.slum-syringe::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: -3px;
+  width: 10px;
+  height: 8px;
+  background: #888;
+}
+
+.slum-baggy {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 14px;
+  height: 18px;
+  background: rgba(200, 200, 200, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.slum-addict-svg {
+  position: absolute;
+  bottom: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 150px;
+  height: auto;
+  z-index: 12;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.65));
+}
+
+.addict-arm-gun {
+  transform-origin: 100px 80px;
+  transform-box: fill-box;
+  transition: transform 1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.slum-blood-splatter {
+  position: absolute;
+  top: 24%;
+  left: 42%;
+  width: 130px;
+  height: 90px;
+  opacity: 0;
+  z-index: 10;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 50% 40% at 45% 55%, rgba(90, 8, 8, 0.85) 0%, transparent 70%),
+    radial-gradient(ellipse 25% 20% at 70% 40%, rgba(70, 6, 6, 0.7) 0%, transparent 70%);
+  transform: scale(0.3);
+}
+
+.slum-blood-mist {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 48% 32%, rgba(120, 10, 10, 0.28) 0%, transparent 38%);
+  opacity: 0;
+  z-index: 14;
+  pointer-events: none;
+}
+
+.slum-muzzle-flash {
+  position: absolute;
+  bottom: 42%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 70px;
+  height: 70px;
+  background: radial-gradient(circle, #fff 0%, #ffaa44 40%, transparent 70%);
+  opacity: 0;
+  z-index: 16;
+  pointer-events: none;
+}
+
+.slum-red-flash {
+  z-index: 18;
+}
+
+.slum-blackout {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  z-index: 24;
+  pointer-events: none;
+}
+
+.slum-timecode,
+.slum-caption {
+  z-index: 30;
+}
+
+.slum-subtitle {
+  z-index: 30;
+  opacity: 1;
+  color: rgba(255, 230, 200, 0.88);
+}
+
+.slum-remaining {
+  position: absolute;
+  top: 2.8rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(180, 100, 60, 0.65);
+  z-index: 30;
+}
+
+.slum-player-name {
+  position: absolute;
+  bottom: 8%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  letter-spacing: 0.22em;
+  color: rgba(255, 200, 140, 0.55);
+  z-index: 30;
+}
+
+.slum-result .cinema-result-text.death {
+  color: rgba(200, 130, 110, 0.8);
+  font-size: clamp(1.1rem, 3vw, 1.5rem);
+}
+
+.slum-result .cinema-result-text.survive {
+  color: rgba(200, 190, 170, 0.75);
+}
+
+/* Slum phases */
+.slum-cinema.slum-phase-high .slum-addict-svg {
+  animation: addictTremble 0.14s ease-in-out infinite alternate;
+}
+
+.slum-cinema.slum-phase-high .slum-works {
+  animation: worksGlow 1.5s ease-in-out infinite alternate;
+}
+
+.slum-cinema.slum-phase-high .slum-frame {
+  animation: cameraPush 3s ease-out forwards;
+}
+
+.slum-cinema.slum-phase-aim .addict-arm-gun {
+  transform: rotate(-52deg) translate(-18px, -28px);
+}
+
+.slum-cinema.slum-phase-aim .slum-addict-svg {
+  animation: addictTremble 0.08s ease-in-out infinite alternate;
+}
+
+.slum-cinema.slum-phase-aim .slum-frame {
+  animation: cameraAim 1.1s ease forwards;
+}
+
+.slum-cinema.slum-phase-shot .slum-muzzle-flash,
+.slum-cinema.slum-phase-shot .slum-muzzle-flash-svg {
+  animation: muzzleFlashReal 0.2s ease forwards;
+}
+
+.slum-cinema.slum-phase-shot .slum-flash {
+  animation: whiteFlashReal 0.22s ease forwards;
+}
+
+.slum-cinema.slum-phase-shot .slum-frame {
+  animation: recoilShake 0.35s ease;
+}
+
+.slum-cinema.slum-phase-survive .slum-addict-svg {
+  animation: addictExhale 2s ease forwards;
+}
+
+.slum-cinema.slum-phase-survive .addict-arm-gun {
+  transform: rotate(-20deg) translate(-8px, -10px);
+}
+
+.slum-cinema.slum-phase-survive .slum-result {
+  opacity: 1;
+}
+
+.slum-cinema.slum-phase-survive .cinema-result-text.survive:not(.hidden) {
+  animation: resultFadeIn 1s ease 0.5s forwards;
+}
+
+.slum-cinema.slum-phase-survive .cinema-result-line {
+  animation: lineDraw 0.8s ease 0.2s forwards;
+}
+
+.slum-cinema.slum-phase-death .slum-addict-svg {
+  animation: addictCollapse 0.75s ease 0.08s forwards;
+}
+
+.slum-cinema.slum-phase-death .addict-blood {
+  animation: bloodReveal 0.5s ease 0.12s forwards;
+}
+
+.slum-cinema.slum-phase-death .slum-blood-splatter {
+  animation: bloodWallSplatter 0.55s ease 0.1s forwards;
+}
+
+.slum-cinema.slum-phase-death .slum-blood-mist {
+  animation: bloodMistFade 1.4s ease 0.05s forwards;
+}
+
+.slum-cinema.slum-phase-death .slum-red-flash {
+  animation: redFlashReal 1.1s ease forwards;
+}
+
+.slum-cinema.slum-phase-death .slum-muzzle-flash {
+  animation: muzzleFlashReal 0.25s ease forwards;
+}
+
+.slum-cinema.slum-phase-death .slum-flash {
+  animation: whiteFlashReal 0.25s ease forwards;
+}
+
+.slum-cinema.slum-phase-death .slum-blackout {
+  animation: slumFadeBlack 1.6s ease 0.4s forwards;
+}
+
+.slum-cinema.slum-phase-death .slum-chair {
+  animation: chairTip 0.6s ease 0.3s forwards;
+}
+
+.slum-cinema.slum-phase-death .slum-result {
+  opacity: 1;
+}
+
+.slum-cinema.slum-phase-death .cinema-result-text.death:not(.hidden) {
+  animation: resultFadeIn 1.2s ease 0.9s forwards;
+}
+
+.slum-cinema.slum-phase-death .cinema-result-line {
+  animation: lineDraw 0.8s ease 0.7s forwards;
+}
+
+.slum-cinema.slum-phase-win .slum-blackout {
+  opacity: 0.2;
+}
+
+.slum-cinema.slum-phase-win .slum-addict-svg {
+  animation: addictExhale 1.5s ease forwards;
+}
+
+.slum-cinema.slum-phase-win .slum-result {
+  opacity: 1;
+}
+
+.slum-cinema.slum-phase-win .cinema-result-text.survive:not(.hidden) {
+  animation: resultFadeIn 1.2s ease 0.5s forwards;
+}
+
+@keyframes slumFireFlicker {
+  from { opacity: 0.85; transform: translateX(-50%) scale(1); }
+  to { opacity: 1; transform: translateX(-50%) scale(1.08); }
+}
+
+@keyframes addictTremble {
+  from { transform: translateX(-50%) translateX(-2px) rotate(-0.5deg); }
+  to { transform: translateX(-50%) translateX(2px) rotate(0.5deg); }
+}
+
+@keyframes worksGlow {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.25); }
+}
+
+@keyframes addictExhale {
+  0% { transform: translateX(-50%) translateY(0); }
+  40% { transform: translateX(-50%) translateY(5px); }
+  100% { transform: translateX(-50%) translateY(3px); }
+}
+
+@keyframes addictCollapse {
+  0% { transform: translateX(-50%) rotate(0); }
+  20% { transform: translateX(-48%) rotate(-8deg) translateY(-4px); }
+  50% { transform: translateX(-52%) rotate(12deg) translateY(14px); }
+  100% { transform: translateX(-50%) rotate(22deg) translateY(28px); opacity: 0.35; }
+}
+
+@keyframes chairTip {
+  to { transform: rotate(-12deg) translateX(-8px); }
+}
+
+@keyframes slumFadeBlack {
+  0% { opacity: 0; }
+  40% { opacity: 0.2; }
+  100% { opacity: 0.7; }
+}
+
+@media (max-width: 768px) {
+  .letterbox-bar {
+    flex: 0 0 7vh;
+  }
+
+  .cinema-timecode,
+  .slum-timecode {
+    left: 0.75rem;
+    top: 0.75rem;
+    font-size: 0.58rem;
+    letter-spacing: 0.12em;
+  }
+
+  .cinema-caption,
+  .slum-caption {
+    font-size: clamp(0.85rem, 3.5vw, 1.1rem);
+    letter-spacing: 0.2em;
+  }
+
+  .cinema-subtitle,
+  .slum-subtitle {
+    font-size: clamp(0.75rem, 3vw, 0.95rem);
+    padding: 0 1rem;
+  }
+
+  .cinema-prisoner-svg {
+    width: 100px;
+  }
+
+  .cinema-soldier-svg {
+    width: 120px;
+  }
+
+  .slum-addict-svg {
+    width: 110px;
+  }
+
+  .slum-graffiti {
+    font-size: clamp(1.5rem, 8vw, 2.5rem);
+  }
+
+  .slum-player-name,
+  .slum-remaining {
+    font-size: clamp(0.8rem, 3.5vw, 1rem);
+  }
+
+  .cinema-result-text {
+    font-size: clamp(1.1rem, 5vw, 1.6rem);
+  }
+}
+
+@media (max-width: 480px) {
+  .letterbox-bar {
+    flex: 0 0 5vh;
+  }
+
+  .cinema-chair-wrap {
+    width: 88px;
+    height: 76px;
+  }
+
+  .slum-chair-wrap {
+    width: 80px;
+  }
+
+  .cinema-bulb {
+    width: 16px;
+    height: 22px;
+  }
+
+  .cinema-light-cone {
+    width: 220px;
+  }
+}
+

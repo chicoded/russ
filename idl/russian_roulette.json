@@ -1,0 +1,126 @@
+{
+  "address": "RouG1111111111111111111111111111111111111",
+  "metadata": {
+    "name": "russian_roulette",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "create_game",
+      "accounts": [
+        { "name": "host", "writable": true, "signer": true },
+        { "name": "game", "writable": true },
+        { "name": "host_player", "writable": true },
+        { "name": "vault", "writable": true },
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
+      ],
+      "args": [
+        { "name": "game_id", "type": "u64" },
+        { "name": "bullets", "type": "u8" },
+        { "name": "min_players", "type": "u8" },
+        { "name": "max_players", "type": "u8" },
+        { "name": "min_bet", "type": "u64" },
+        { "name": "host_bet", "type": "u64" }
+      ]
+    },
+    {
+      "name": "join_game",
+      "accounts": [
+        { "name": "joiner", "writable": true, "signer": true },
+        { "name": "game", "writable": true },
+        { "name": "player", "writable": true },
+        { "name": "vault", "writable": true },
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
+      ],
+      "args": [{ "name": "bet", "type": "u64" }]
+    },
+    {
+      "name": "agree",
+      "accounts": [
+        { "name": "player", "writable": true, "signer": true },
+        { "name": "game", "writable": true },
+        { "name": "player_account", "writable": true }
+      ],
+      "args": []
+    },
+    {
+      "name": "start_game",
+      "accounts": [
+        { "name": "game", "writable": true },
+        { "name": "host", "signer": true }
+      ],
+      "args": []
+    },
+    {
+      "name": "declare_winner",
+      "accounts": [
+        { "name": "game", "writable": true },
+        { "name": "host", "signer": true },
+        { "name": "winner" }
+      ],
+      "args": []
+    },
+    {
+      "name": "settle_winner",
+      "accounts": [
+        { "name": "game", "writable": true },
+        { "name": "host", "writable": true, "signer": true },
+        { "name": "winner", "writable": true },
+        { "name": "vault", "writable": true }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_game",
+      "accounts": [
+        { "name": "game", "writable": true },
+        { "name": "host", "signer": true }
+      ],
+      "args": []
+    },
+    {
+      "name": "refund_player",
+      "accounts": [
+        { "name": "game" },
+        { "name": "host", "signer": true },
+        { "name": "player_account" },
+        { "name": "player_wallet", "writable": true },
+        { "name": "vault", "writable": true }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_solo_session",
+      "accounts": [
+        { "name": "player", "writable": true, "signer": true },
+        { "name": "session", "writable": true },
+        { "name": "vault", "writable": true },
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
+      ],
+      "args": [
+        { "name": "session_id", "type": "u64" },
+        { "name": "stake", "type": "u64" }
+      ]
+    },
+    {
+      "name": "solo_cashout",
+      "accounts": [
+        { "name": "player", "writable": true, "signer": true },
+        { "name": "session", "writable": true },
+        { "name": "vault", "writable": true }
+      ],
+      "args": [{ "name": "payout", "type": "u64" }]
+    },
+    {
+      "name": "solo_forfeit",
+      "accounts": [
+        { "name": "player", "writable": true, "signer": true },
+        { "name": "session", "writable": true },
+        { "name": "vault", "writable": true },
+        { "name": "treasury", "writable": true }
+      ],
+      "args": []
+    }
+  ]
+}

@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Contract Roulette — Elimination Protocol</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="noise"></div>
+  <div class="vignette"></div>
+  <div class="hitman-grid" aria-hidden="true"></div>
+  <div class="hitman-scan" aria-hidden="true"></div>
+
+  <main class="app">
+    <div class="app-header-sticky" id="app-header-sticky">
+    <nav id="top-nav" class="top-nav hidden">
+      <button type="button" id="nav-menu-toggle" class="nav-menu-toggle hidden" aria-label="Open menu" title="Main menu">
+        <span class="nav-menu-icon" aria-hidden="true"></span>
+      </button>
+      <span class="nav-title"><span class="nav-red-dot"></span> CONTRACT · ROULETTE</span>
+      <div class="nav-user">
+        <div class="nav-user-menu">
+          <button type="button" id="nav-user-btn" class="nav-user-btn" aria-expanded="false">
+            <span id="nav-username">Player</span>
+            <span id="nav-balance" class="nav-balance">0 SOL</span>
+          </button>
+          <div id="nav-dropdown" class="nav-dropdown hidden">
+            <span class="nav-dropdown-label">Mock wallet</span>
+            <div class="nav-wallet-row">
+              <code id="nav-wallet-address" class="nav-wallet-address">—</code>
+              <button type="button" id="copy-wallet-btn" class="nav-copy-btn">Copy</button>
+            </div>
+            <button type="button" id="nav-history-btn" class="nav-dropdown-action">Bet history</button>
+            <button type="button" id="nav-setup-btn" class="nav-dropdown-action">Main menu</button>
+          </div>
+        </div>
+        <button type="button" id="logout-btn" class="nav-link nav-link-muted">Logout</button>
+      </div>
+    </nav>
+
+    <nav id="screen-toolbar" class="screen-toolbar hidden" aria-label="Screen navigation">
+      <button type="button" id="toolbar-menu-btn" class="toolbar-btn toolbar-menu-btn">
+        <span class="toolbar-back-icon" aria-hidden="true">←</span>
+        <span>Main Menu</span>
+      </button>
+      <span class="toolbar-crumb" id="toolbar-crumb">Active Mission</span>
+      <button type="button" id="toolbar-history-btn" class="toolbar-btn toolbar-ghost">History</button>
+    </nav>
+    </div>
+
+    <div id="tx-status" class="tx-status hidden"></div>
+
+    <header class="header">
+      <div class="header-barcode" aria-hidden="true"></div>
+      <p class="header-tag">CLASSIFIED CONTRACT</p>
+      <h1 class="title">RUSSIAN <span class="title-accent">ROULETTE</span></h1>
+      <p class="subtitle">Elimination protocol · mock SOL · last operative standing claims the pot</p>
+    </header>
+
+    <!-- Login -->
+    <section id="login-screen" class="screen active">
+      <div class="card login-card agent-card">
+        <div class="card-corner card-corner-tl" aria-hidden="true"></div>
+        <div class="card-corner card-corner-br" aria-hidden="true"></div>
+        <p class="agent-stripe">ICA · FIELD ACCESS</p>
+        <h2>Agent Login</h2>
+        <p class="login-desc">Establish identity to receive a <strong>mock wallet</strong> and <strong>100 practice SOL</strong>. All operations are simulated — no real funds.</p>
+        <div class="form-group">
+          <label for="login-username">Username</label>
+          <input type="text" id="login-username" placeholder="Your name" maxlength="20">
+        </div>
+        <button type="button" id="login-btn" class="btn btn-primary">Login & Create Wallet</button>
+        <p id="login-error" class="login-error hidden"></p>
+        <p class="hint login-warning">Practice mode only — not real cryptocurrency.</p>
+      </div>
+    </section>
+
+    <!-- Setup Screen -->
+    <section id="setup-screen" class="screen">
+      <div class="card setup-card">
+        <h2>Contract Setup</h2>
+
+        <div class="mode-toggle">
+          <button type="button" class="mode-btn active" data-mode="single">Single Player</button>
+          <button type="button" class="mode-btn" data-mode="multi">Multiplayer</button>
+        </div>
+
+        <div id="single-player-options">
+        <div class="form-group">
+          <label for="base-bet">Base Stake (SOL)</label>
+          <input type="number" id="base-bet" min="0.01" max="100" step="0.01" value="0.1">
+          <span class="hint">Your total bet = bullets × base bet</span>
+          <span class="hint" id="single-hint">More bullets = riskier clicks but much bigger payouts</span>
+        </div>
+
+        <div class="form-group">
+          <label for="bullets">Chamber Loadout</label>
+          <div class="bullet-selector bullet-selector-visual" id="single-bullet-selector">
+            <button type="button" class="bullet-btn" data-bullets="1">1</button>
+            <button type="button" class="bullet-btn active" data-bullets="2">2</button>
+            <button type="button" class="bullet-btn" data-bullets="3">3</button>
+            <button type="button" class="bullet-btn" data-bullets="4">4</button>
+            <button type="button" class="bullet-btn" data-bullets="5">5</button>
+          </div>
+          <span class="hint" id="bet-preview">Total bet: $20 (2 bullets × $10)</span>
+          <div id="payout-preview" class="payout-preview"></div>
+        </div>
+        </div>
+
+        <div id="multi-setup" class="multi-setup hidden">
+          <div class="multi-tabs">
+            <button type="button" class="multi-tab active" data-multi-tab="host">Host Game</button>
+            <button type="button" class="multi-tab" data-multi-tab="join">Join with Key</button>
+          </div>
+
+          <div id="multi-host-panel" class="multi-panel">
+            <div class="form-group">
+              <label for="host-name">Your Name (Host)</label>
+              <input type="text" id="host-name" placeholder="Host name" maxlength="20" value="Host">
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="host-min-players">Min Players to Start</label>
+                <input type="number" id="host-min-players" min="2" max="5" value="2">
+              </div>
+              <div class="form-group">
+                <label>Max Players</label>
+                <p class="host-max-players-note">5 players maximum</p>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="host-fixed-stake">Fixed Stake per Player (SOL)</label>
+              <input type="number" id="host-fixed-stake" min="0.01" max="1000" step="0.01" value="0.2">
+              <span class="hint">Every player pays this exact amount. Host sets bullets in the lobby.</span>
+            </div>
+
+            <span class="hint">Share the <strong>join key</strong> after creating the lobby. Host sets bullets and stake before starting.</span>
+            <p id="rejoin-lobby-hint" class="rejoin-hint hidden"></p>
+            <button type="button" id="open-lobby-btn" class="btn btn-primary multi-action-btn">Create Lobby</button>
+          </div>
+
+          <div id="multi-join-panel" class="multi-panel hidden">
+            <div class="form-group">
+              <label for="join-code">Join Key</label>
+              <input type="text" id="join-code" placeholder="e.g. X7K2M9" maxlength="6" autocapitalize="characters" spellcheck="false">
+              <span class="hint">Enter the 6-character key from the host</span>
+            </div>
+            <div id="join-rules-preview" class="join-rules-preview hidden"></div>
+            <div class="form-group">
+              <label for="join-setup-name">Your Name</label>
+              <input type="text" id="join-setup-name" placeholder="Your name" maxlength="20">
+            </div>
+            <button type="button" id="join-with-code-btn" class="btn btn-primary multi-action-btn">Join Lobby</button>
+          </div>
+        </div>
+
+        <div id="single-setup" class="single-setup">
+          <div class="form-group">
+            <label for="player-name">Your Name</label>
+            <input type="text" id="player-name" placeholder="Enter your name" maxlength="20" value="Player">
+          </div>
+        </div>
+
+        <button type="button" id="start-btn" class="btn btn-primary">Start Game</button>
+        <button type="button" id="view-history-btn" class="btn btn-secondary history-link-btn">Bet History</button>
+      </div>
+    </section>
+
+    <!-- Multiplayer Lobby -->
+    <section id="lobby-screen" class="screen">
+      <div class="lobby-layout">
+        <div class="card lobby-rules-card">
+          <div class="lobby-header">
+            <h2>Operation Lobby</h2>
+            <span class="host-badge" id="lobby-host-label">Host: —</span>
+          </div>
+
+          <div class="rules-summary" id="rules-summary">
+            <h3>Game Rules</h3>
+            <p class="hint rules-fixed-note">Up to 5 players. Host sets bullets and stake before the game starts.</p>
+            <ul id="rules-list"></ul>
+          </div>
+
+          <div id="host-bullets-control" class="host-bullets-control hidden">
+            <h3>Chamber Loadout (Host)</h3>
+            <div class="bullet-selector bullet-selector-visual" id="lobby-bullet-selector">
+              <button type="button" class="lobby-bullet-btn" data-bullets="1">1</button>
+              <button type="button" class="lobby-bullet-btn active" data-bullets="2">2</button>
+              <button type="button" class="lobby-bullet-btn" data-bullets="3">3</button>
+              <button type="button" class="lobby-bullet-btn" data-bullets="4">4</button>
+              <button type="button" class="lobby-bullet-btn" data-bullets="5">5</button>
+            </div>
+            <p class="hint" id="host-bullets-hint">Bullets loaded in the chamber each round — more bullets = higher risk per shot.</p>
+          </div>
+
+          <div id="host-stake-control" class="host-stake-control hidden">
+            <h3>Stake (Host)</h3>
+            <div class="host-stake-row">
+              <input type="number" id="lobby-host-stake" min="0.01" max="1000" step="0.01" value="0.2">
+              <button type="button" id="update-stake-btn" class="btn btn-secondary">Update Stake</button>
+            </div>
+            <p class="hint" id="host-stake-hint"></p>
+          </div>
+        </div>
+
+        <div class="card lobby-players-card">
+          <div class="lobby-key-banner" id="lobby-key-banner">
+            <span class="lobby-key-label">Join Key</span>
+            <div class="lobby-key-row">
+              <code id="lobby-join-key" class="lobby-join-key">——</code>
+              <button type="button" id="copy-join-key-btn" class="nav-copy-btn">Copy key</button>
+              <button type="button" id="copy-join-link-btn" class="nav-copy-btn">Copy link</button>
+            </div>
+            <p class="hint lobby-key-hint">Share this key so others can join from <strong>Multiplayer → Join with Key</strong></p>
+          </div>
+
+          <div class="lobby-pot-banner">
+            <span>Total Pot</span>
+            <strong id="lobby-pot">$0</strong>
+          </div>
+
+          <div class="agreement-status" id="agreement-status">
+            Waiting for players…
+          </div>
+
+          <ul id="lobby-players-list" class="lobby-players-list"></ul>
+
+          <div id="lobby-member-status" class="lobby-member-status hidden">
+            <p class="hint" id="lobby-member-hint"></p>
+          </div>
+
+          <div class="join-panel" id="join-panel">
+            <h3 id="join-panel-title">Join This Lobby</h3>
+            <p class="hint join-panel-hint" id="join-panel-hint">Enter your name to join at the fixed stake.</p>
+            <div class="form-group">
+              <label for="join-name">Your Name</label>
+              <input type="text" id="join-name" placeholder="Enter your name" maxlength="20">
+            </div>
+            <p id="join-fixed-stake-label" class="join-fixed-stake-label"></p>
+            <button type="button" id="join-game-btn" class="btn btn-secondary">Join Game</button>
+          </div>
+
+          <div class="lobby-actions">
+            <button type="button" id="leave-lobby-btn" class="btn btn-secondary">Leave Lobby</button>
+            <button type="button" id="end-lobby-btn" class="btn btn-secondary hidden">End Lobby for All</button>
+            <button type="button" id="start-multi-btn" class="btn btn-primary" disabled>Start Game</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Game Screen -->
+    <section id="game-screen" class="screen">
+      <div class="game-layout">
+        <aside class="sidebar">
+          <div class="pot-display">
+            <span class="pot-label" id="pot-label">POT</span>
+            <span class="pot-amount" id="pot-amount">$0</span>
+            <span class="pot-sub" id="pot-sub"></span>
+          </div>
+
+          <div id="single-stats" class="stats-panel hidden">
+            <div class="stat stat-loadout">
+              <span class="stat-label">Loadout</span>
+              <span class="stat-value stat-bullets-wrap">
+                <span id="stat-bullets-rack-single" class="stat-bullets-rack"></span>
+                <span id="stat-bullets-single">2 / 6</span>
+              </span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Round</span>
+              <span class="stat-value" id="stat-round-single">1</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">At Risk</span>
+              <span class="stat-value" id="stat-stake">$0</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Profit</span>
+              <span class="stat-value profit" id="stat-profit">$0</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Next Click</span>
+              <span class="stat-value" id="stat-next-reward">$0</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Survive Odds</span>
+              <span class="stat-value" id="stat-odds">0%</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Streak</span>
+              <span class="stat-value" id="stat-streak">0</span>
+            </div>
+          </div>
+
+          <div id="multi-stats" class="stats-panel">
+            <div class="stat stat-loadout">
+              <span class="stat-label">Loadout</span>
+              <span class="stat-value stat-bullets-wrap">
+                <span id="stat-bullets-rack" class="stat-bullets-rack"></span>
+                <span id="stat-bullets">2 / 6</span>
+              </span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Round</span>
+              <span class="stat-value" id="stat-round">1</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Mode</span>
+              <span class="stat-value" id="stat-mode">Single</span>
+            </div>
+          </div>
+
+          <ul id="players-list" class="players-list"></ul>
+        </aside>
+
+        <div class="game-center dossier-panel">
+          <div class="turn-indicator-wrap">
+            <div class="turn-indicator" id="turn-indicator">Your turn</div>
+          </div>
+
+          <div class="revolver-stage">
+            <div class="target-reticle" id="target-reticle" aria-hidden="true">
+              <span class="reticle-ring"></span>
+              <span class="reticle-cross-h"></span>
+              <span class="reticle-cross-v"></span>
+            </div>
+            <div class="revolver-container">
+            <div class="revolver" id="revolver">
+              <div class="cylinder" id="cylinder">
+                <div class="chamber" data-index="0"></div>
+                <div class="chamber" data-index="1"></div>
+                <div class="chamber" data-index="2"></div>
+                <div class="chamber" data-index="3"></div>
+                <div class="chamber" data-index="4"></div>
+                <div class="chamber" data-index="5"></div>
+              </div>
+              <div class="barrel"></div>
+              <div class="hammer" id="hammer"></div>
+              <div class="trigger-guard"></div>
+            </div>
+            </div>
+          </div>
+
+          <div class="action-area">
+            <button type="button" id="pull-trigger-btn" class="btn btn-danger btn-large">
+              Pull Trigger
+            </button>
+            <button type="button" id="cash-out-btn" class="btn btn-cashout btn-large hidden">
+              Cash Out
+            </button>
+            <button type="button" id="forfeit-game-btn" class="btn btn-secondary btn-large hidden">
+              Leave Game (Forfeit)
+            </button>
+          </div>
+
+          <p id="multi-lock-hint" class="multi-lock-hint hidden">Game in progress — leaving forfeits your stake.</p>
+
+          <div class="message-box" id="message-box">
+            Take your shot. Good luck.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Shot cinema overlay — cinematic interrogation -->
+    <div id="shot-cinema" class="shot-cinema hidden" aria-hidden="true">
+      <div class="cinema-letterbox">
+        <div class="letterbox-bar letterbox-top"></div>
+        <div class="cinema-frame">
+          <div class="cinema-wall"></div>
+          <div class="cinema-floor"></div>
+          <div class="cinema-shadow-pool"></div>
+          <div class="cinema-haze haze-1"></div>
+          <div class="cinema-haze haze-2"></div>
+          <div class="cinema-bulb-cord"></div>
+          <div class="cinema-bulb"></div>
+          <div class="cinema-light-cone"></div>
+
+          <div class="cinema-timecode"><span class="rec-dot"></span> INTERROGATION TAPE</div>
+          <div class="cinema-caption" id="cinema-caption">SUBJECT — ROOM 7</div>
+          <div class="cinema-subtitle" id="cinema-subtitle"></div>
+
+          <div class="cinema-chair-wrap">
+            <div class="cinema-chair-metal"></div>
+          </div>
+
+          <svg class="cinema-prisoner-svg" id="cinema-prisoner" viewBox="0 0 120 160" aria-hidden="true">
+            <defs>
+              <linearGradient id="prisonerRim" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#4a4038"/>
+                <stop offset="45%" stop-color="#322c26"/>
+                <stop offset="100%" stop-color="#241f1a"/>
+              </linearGradient>
+            </defs>
+            <ellipse class="prisoner-shadow" cx="60" cy="148" rx="42" ry="8"/>
+            <path class="prisoner-torso" d="M38 72 Q60 68 82 72 L88 118 Q60 124 32 118 Z"/>
+            <path class="prisoner-neck" d="M52 58 Q60 54 68 58 L66 72 L54 72 Z"/>
+            <ellipse class="prisoner-head" cx="60" cy="44" rx="18" ry="22"/>
+            <path class="prisoner-arm-l" d="M38 78 Q18 82 14 98 Q12 108 22 106 Q28 92 36 88 Z"/>
+            <path class="prisoner-arm-r" d="M82 78 Q102 82 106 98 Q108 108 98 106 Q92 92 84 88 Z"/>
+            <path class="prisoner-leg-l" d="M42 118 L38 148 L48 148 L52 118 Z"/>
+            <path class="prisoner-leg-r" d="M78 118 L82 148 L72 148 L68 118 Z"/>
+            <path class="prisoner-rope" d="M34 86 Q60 96 86 86" fill="none" stroke="#2a2018" stroke-width="2.5"/>
+            <g class="blood-head" opacity="0">
+              <ellipse cx="52" cy="36" rx="14" ry="10" fill="#4a0808"/>
+              <ellipse cx="68" cy="40" rx="8" ry="6" fill="#3a0606"/>
+              <path d="M48 30 Q60 22 72 34" fill="none" stroke="#5a0a0a" stroke-width="3" stroke-linecap="round"/>
+            </g>
+          </svg>
+
+          <svg class="cinema-soldier-svg" id="cinema-soldier" viewBox="0 0 140 200" aria-hidden="true">
+            <path class="soldier-coat" d="M48 88 L92 88 L98 178 Q70 184 42 178 Z"/>
+            <path class="soldier-head" d="M58 38 Q70 28 82 38 Q84 52 70 58 Q56 52 58 38 Z"/>
+            <path class="soldier-hat" d="M52 34 L88 34 L86 28 L54 28 Z"/>
+            <rect class="soldier-collar" x="62" y="56" width="16" height="8" rx="2"/>
+            <g class="soldier-arm-gun">
+              <path d="M30 92 L18 98 L8 96 L6 92 L14 88 L28 86 Z"/>
+              <rect x="4" y="88" width="34" height="8" rx="1"/>
+              <rect x="-2" y="89" width="12" height="6" rx="1"/>
+              <circle cx="28" cy="92" r="5"/>
+              <circle class="muzzle-flash" cx="-6" cy="92" r="14"/>
+              <ellipse class="gun-smoke" cx="-12" cy="91" rx="16" ry="10"/>
+            </g>
+          </svg>
+
+          <div class="cinema-blood-wall" id="cinema-blood-wall"></div>
+          <div class="cinema-blood-mist"></div>
+          <div class="cinema-breath" id="cinema-breath"></div>
+          <div class="cinema-flash"></div>
+          <div class="cinema-red-flash"></div>
+          <div class="cinema-vignette-heavy"></div>
+          <div class="cinema-grain"></div>
+
+          <div class="cinema-result">
+            <div class="cinema-result-line"></div>
+            <div class="cinema-result-text survive hidden" id="cinema-result-survive">Still breathing</div>
+            <div class="cinema-result-text death hidden" id="cinema-result-death">Subject eliminated</div>
+          </div>
+        </div>
+        <div class="letterbox-bar letterbox-bottom"></div>
+      </div>
+    </div>
+
+    <!-- Slum cinema — multiplayer: addict in alley, russian roulette -->
+    <div id="gang-cinema" class="shot-cinema slum-cinema hidden" aria-hidden="true">
+      <div class="cinema-letterbox">
+        <div class="letterbox-bar letterbox-top"></div>
+        <div class="gang-frame slum-frame">
+          <div class="slum-sky"></div>
+          <div class="slum-alley-wall"></div>
+          <div class="slum-graffiti" aria-hidden="true">NO HOPE</div>
+          <div class="slum-chain-fence"></div>
+          <div class="slum-puddle"></div>
+          <div class="slum-trash slum-trash-1"></div>
+          <div class="slum-trash slum-trash-2"></div>
+          <div class="slum-cardboard"></div>
+          <div class="slum-fire-barrel"></div>
+          <div class="slum-streetlight-cord"></div>
+          <div class="slum-streetlight"></div>
+          <div class="slum-light-pool"></div>
+          <div class="slum-haze"></div>
+
+          <div class="slum-chair-wrap">
+            <div class="slum-chair"></div>
+          </div>
+
+          <div class="slum-works">
+            <div class="slum-spoon"></div>
+            <div class="slum-lighter"></div>
+            <div class="slum-syringe"></div>
+            <div class="slum-baggy"></div>
+          </div>
+
+          <svg class="slum-addict-svg" id="slum-addict" viewBox="0 0 140 200" aria-hidden="true">
+            <defs>
+              <linearGradient id="addictRim" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#5a4a3a"/>
+                <stop offset="50%" stop-color="#3a3028"/>
+                <stop offset="100%" stop-color="#2a221c"/>
+              </linearGradient>
+            </defs>
+            <ellipse cx="70" cy="188" rx="48" ry="9" fill="rgba(0,0,0,0.45)"/>
+            <path class="addict-torso" d="M48 95 Q70 88 92 95 L96 148 Q70 154 44 148 Z" fill="url(#addictRim)"/>
+            <path class="addict-neck" d="M58 78 Q70 72 82 78 L80 95 L60 95 Z" fill="url(#addictRim)"/>
+            <ellipse class="addict-head" cx="70" cy="58" rx="20" ry="24" fill="url(#addictRim)"/>
+            <path class="addict-hair" d="M52 48 Q70 32 88 48 Q86 38 70 34 Q54 38 52 48" fill="#1a1410"/>
+            <path class="addict-arm-l" d="M48 100 Q28 108 22 128 Q18 138 30 134 Q38 118 46 108 Z" fill="url(#addictRim)"/>
+            <g class="addict-arm-gun">
+              <path class="addict-arm-r" d="M92 100 Q112 95 118 72 Q120 62 108 64 Q100 78 94 100 Z" fill="url(#addictRim)"/>
+              <rect x="88" y="58" width="32" height="7" rx="1" fill="#1a1a1a" transform="rotate(-35 88 62)"/>
+              <rect x="76" y="56" width="14" height="6" rx="1" fill="#252525" transform="rotate(-35 76 59)"/>
+              <circle cx="118" cy="64" r="5" fill="#2a2420" transform="rotate(-35 118 64)"/>
+              <circle class="slum-muzzle-flash-svg" cx="72" cy="48" r="14" fill="#fff" opacity="0"/>
+            </g>
+            <path class="addict-leg-l" d="M52 148 L46 182 L58 182 L62 148 Z" fill="url(#addictRim)"/>
+            <path class="addict-leg-r" d="M88 148 L94 182 L82 182 L78 148 Z" fill="url(#addictRim)"/>
+            <g class="addict-blood" opacity="0">
+              <ellipse cx="62" cy="48" rx="16" ry="12" fill="#4a0808"/>
+              <ellipse cx="78" cy="52" rx="10" ry="8" fill="#3a0606"/>
+              <path d="M56 40 Q70 28 84 42" fill="none" stroke="#5a0a0a" stroke-width="3" stroke-linecap="round"/>
+            </g>
+          </svg>
+
+          <div class="slum-blood-splatter"></div>
+          <div class="slum-blood-mist"></div>
+          <div class="slum-muzzle-flash"></div>
+          <div class="cinema-flash slum-flash"></div>
+          <div class="cinema-red-flash slum-red-flash"></div>
+          <div class="slum-blackout"></div>
+          <div class="cinema-vignette-heavy"></div>
+          <div class="cinema-grain"></div>
+
+          <div class="cinema-timecode slum-timecode"><span class="rec-dot"></span> ALLEY CAM · BLOCK 9</div>
+          <div class="cinema-caption slum-caption" id="gang-caption">THE ALLEY</div>
+          <div class="cinema-subtitle slum-subtitle" id="gang-subtitle"></div>
+          <div class="slum-remaining" id="gang-remaining"></div>
+          <div class="slum-player-name" id="gang-center-name"></div>
+
+          <div class="cinema-result slum-result">
+            <div class="cinema-result-line"></div>
+            <div class="cinema-result-text survive hidden" id="gang-result-survive">Still breathing</div>
+            <div class="cinema-result-text death hidden" id="gang-result-death"></div>
+          </div>
+        </div>
+        <div class="letterbox-bar letterbox-bottom"></div>
+      </div>
+    </div>
+
+    <!-- Bet History -->
+    <section id="history-screen" class="screen">
+      <div class="card history-card">
+        <div class="history-header">
+          <h2>Bet History</h2>
+          <button type="button" id="clear-history-btn" class="btn btn-secondary btn-sm">Clear all</button>
+        </div>
+        <p class="history-desc">Past bets and outcomes for your wallet — saved locally on this device.</p>
+        <div id="history-summary" class="history-summary"></div>
+        <p id="history-empty" class="history-empty hidden">No bets recorded yet. Finish a game to see it here.</p>
+        <div class="history-table-wrap hidden">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Mode</th>
+                <th>Result</th>
+                <th>Bet</th>
+                <th>Payout</th>
+                <th>P/L</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody id="history-list"></tbody>
+          </table>
+        </div>
+        <button type="button" id="history-back-btn" class="btn btn-primary">Back to Setup</button>
+      </div>
+    </section>
+
+    <!-- Result Screen -->
+    <section id="result-screen" class="screen">
+      <div class="card result-card contract-result">
+        <p class="result-stripe">MISSION REPORT</p>
+        <div class="result-icon" id="result-icon">🏆</div>
+        <h2 id="result-title">You Win!</h2>
+        <p id="result-message">You survived and won the pot!</p>
+        <div class="result-amount" id="result-amount">$80</div>
+        <button type="button" id="play-again-btn" class="btn btn-primary">Play Again</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

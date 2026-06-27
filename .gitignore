@@ -1,0 +1,18 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.vscode/
+.idea/
+
+# Rust / Anchor build artifacts (optional local builds)
+target/
+.anchor/
+test-ledger/
+
+# Secrets — never commit
+.env
+.env.*
+*.pem
+credentials.json

@@ -2,6 +2,18 @@
  * Hitman-style UI polish — bullet load visuals, revolver chamber cues & ambient effects.
  */
 
+let concealChamberLoadout = true;
+
+export function setConcealChamberLoadout(conceal) {
+  concealChamberLoadout = conceal;
+  const cylinderEl = document.getElementById('cylinder');
+  if (cylinderEl) cylinderEl.classList.toggle('concealed', conceal);
+}
+
+export function getConcealChamberLoadout() {
+  return concealChamberLoadout;
+}
+
 function buildBulletRoundsMarkup(count) {
   const cartridges = Array.from({ length: count }, () => '<span class="cartridge"></span>').join('');
   const label = count === 1 ? '1 round' : `${count} rounds`;
@@ -30,15 +42,26 @@ export function syncCylinderLoadVisuals(cylinder = [], chambersChecked = 0) {
     const idx = parseInt(ch.dataset.index, 10);
     const resolved = ch.classList.contains('fired') || ch.classList.contains('safe');
     const hasBullet = Boolean(cylinder[idx]) && !resolved;
-    ch.classList.toggle('loaded', hasBullet);
+    const showBullet = hasBullet && !concealChamberLoadout;
+    ch.classList.toggle('loaded', showBullet);
     ch.classList.toggle('spent', resolved);
   });
 
   const cylinderEl = document.getElementById('cylinder');
-  if (cylinderEl && chambersChecked === 0) {
-    cylinderEl.classList.add('cylinder-armed');
-    window.setTimeout(() => cylinderEl.classList.remove('cylinder-armed'), 900);
+  if (cylinderEl) {
+    cylinderEl.classList.toggle('concealed', concealChamberLoadout);
+    if (chambersChecked === 0 && !concealChamberLoadout) {
+      cylinderEl.classList.add('cylinder-armed');
+      window.setTimeout(() => cylinderEl.classList.remove('cylinder-armed'), 900);
+    }
   }
+}
+
+export function revealChamberResult(chamberEl, result) {
+  if (!chamberEl) return;
+  chamberEl.classList.remove('loaded', 'active-chamber');
+  chamberEl.classList.add(result === 'bullet' ? 'fired' : 'safe', 'chamber-revealed');
+  window.setTimeout(() => chamberEl.classList.remove('chamber-revealed'), 700);
 }
 
 export function updateStatBulletRacks(bullets, chambers = 6) {
@@ -134,6 +157,7 @@ function initPullTriggerFx() {
 }
 
 export function initUiPolish() {
+  setConcealChamberLoadout(true);
   initBulletLoadSelectors();
   initScreenTransitions();
   initPullTriggerFx();

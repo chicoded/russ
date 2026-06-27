@@ -1,4 +1,12 @@
-import { initUiPolish, initBulletLoadSelectors, refreshGameVisuals, syncCylinderLoadVisuals } from './ui.js';
+import {
+  initUiPolish,
+  initBulletLoadSelectors,
+  refreshGameVisuals,
+  syncCylinderLoadVisuals,
+  setConcealChamberLoadout,
+  getConcealChamberLoadout,
+  revealChamberResult,
+} from './ui.js';
 import { formatSol, lamportsToSol } from './config.js';
 import {
   startGameMusic,
@@ -1886,14 +1894,16 @@ function resetGameUiForNewRound() {
     cashOutBtn.textContent = 'Cash Out';
   }
   hammer?.classList.remove('cocked', 'fired');
+  setConcealChamberLoadout(true);
   resetChamberVisuals();
 }
 
 function beginGame(message) {
+  setConcealChamberLoadout(true);
   if (state.mode !== 'multi' || !state.cylinder?.length) {
     loadCylinder();
   } else {
-    resetChamberVisuals();
+    resetChamberVisuals(true);
   }
   spinCylinder();
   showScreen('game');
@@ -1914,7 +1924,7 @@ function loadCylinder() {
   });
   state.currentChamber = Math.floor(Math.random() * CHAMBERS);
   state.chambersChecked = 0;
-  resetChamberVisuals();
+  resetChamberVisuals(true);
 }
 
 function shuffle(arr) {
@@ -1925,18 +1935,34 @@ function shuffle(arr) {
   return arr;
 }
 
-function spinCylinder() {
+const CYLINDER_SPIN_MS = 1200;
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function spinCylinderVisualOnly() {
   const cylinderEl = $('#cylinder');
   cylinderEl.classList.add('spinning');
   playCylinderSpin();
-  state.currentChamber = Math.floor(Math.random() * CHAMBERS);
-  if (state.mode === 'multi') persistMultiGameState();
-  setTimeout(() => cylinderEl.classList.remove('spinning'), 1200);
+  return delay(CYLINDER_SPIN_MS).then(() => {
+    cylinderEl.classList.remove('spinning');
+  });
 }
 
-function resetChamberVisuals() {
+function spinCylinder() {
+  state.currentChamber = Math.floor(Math.random() * CHAMBERS);
+  if (state.mode === 'multi') persistMultiGameState();
+  return spinCylinderVisualOnly();
+}
+
+function resetChamberVisuals(fullReset = false) {
   $$('.chamber').forEach((ch) => {
-    ch.classList.remove('fired', 'safe', 'active-chamber', 'loaded', 'spent');
+    if (fullReset) {
+      ch.classList.remove('fired', 'safe', 'active-chamber', 'loaded', 'spent', 'chamber-revealed');
+    } else {
+      ch.classList.remove('active-chamber', 'loaded', 'chamber-revealed');
+    }
   });
   highlightActiveChamber();
   syncCylinderLoadVisuals(state.cylinder, state.chambersChecked);
@@ -1944,6 +1970,7 @@ function resetChamberVisuals() {
 
 function highlightActiveChamber() {
   $$('.chamber').forEach((ch) => ch.classList.remove('active-chamber'));
+  if (getConcealChamberLoadout()) return;
   const active = $(`.chamber[data-index="${state.currentChamber}"]`);
   if (active) active.classList.add('active-chamber');
 }
@@ -1965,7 +1992,7 @@ function advanceToNextPlayer() {
   state.currentPlayerIndex = next;
 }
 
-function pullTrigger() {
+async function pullTrigger() {
   if (state.isProcessing || state.gameOver) return;
 
   const player = getCurrentPlayer();
@@ -1985,89 +2012,99 @@ function pullTrigger() {
   $('#pull-trigger-btn').disabled = true;
   $('#cash-out-btn').disabled = true;
 
+  setConcealChamberLoadout(true);
+  resetChamberVisuals();
+
+  await spinCylinderVisualOnly();
+
+  if (state.gameOver) {
+    finishTurn();
+    return;
+  }
+
   const hammer = $('#hammer');
   hammer.classList.add('cocked');
   playHammerCock();
   state.shotId += 1;
   const shotId = state.shotId;
 
-  setTimeout(async () => {
-    if (shotId !== state.shotId || state.gameOver) {
-      finishTurn();
-      return;
-    }
+  await delay(400);
 
-    hammer.classList.remove('cocked');
-    hammer.classList.add('fired');
+  if (shotId !== state.shotId || state.gameOver) {
+    finishTurn();
+    return;
+  }
 
-    const isBullet = state.cylinder[state.currentChamber];
-    const chamberEl = $(`.chamber[data-index="${state.currentChamber}"]`);
+  hammer.classList.remove('cocked');
+  hammer.classList.add('fired');
 
-    const aliveBefore = getAlivePlayers().map((p) => p.name);
-    const eliminatedBefore = state.players.filter((p) => !p.alive).length;
+  const isBullet = state.cylinder[state.currentChamber];
+  const chamberEl = $(`.chamber[data-index="${state.currentChamber}"]`);
+
+  const aliveBefore = getAlivePlayers().map((p) => p.name);
+  const eliminatedBefore = state.players.filter((p) => !p.alive).length;
+
+  if (state.mode === 'multi') {
+    duckMusic(true);
+    const { playGangCinema } = await getCinema();
+    await playGangCinema({
+      playerName: player.name,
+      survived: !isBullet,
+      aliveNames: aliveBefore,
+      eliminatedCount: eliminatedBefore,
+      totalPlayers: state.players.length,
+    });
+  } else {
+    duckMusic(true);
+    const { playShotCinema } = await getCinema();
+    await playShotCinema({ playerName: player.name, survived: !isBullet });
+  }
+
+  duckMusic(false);
+  hammer.classList.remove('fired');
+
+  revealChamberResult(chamberEl, isBullet ? 'bullet' : 'empty');
+  await delay(900);
+
+  if (isBullet) {
+    setMessage(`BANG! ${player.name} drops off the chair — dead in the alley.`, 'danger');
+    player.alive = false;
 
     if (state.mode === 'multi') {
-      duckMusic(true);
-      const { playGangCinema } = await getCinema();
-      await playGangCinema({
-        playerName: player.name,
-        survived: !isBullet,
-        aliveNames: aliveBefore,
-        eliminatedCount: eliminatedBefore,
-        totalPlayers: state.players.length,
-      });
-    } else {
-      duckMusic(true);
-      const { playShotCinema } = await getCinema();
-      await playShotCinema({ playerName: player.name, survived: !isBullet });
+      recordMultiTurnAction({ type: 'shot', playerName: player.name, survived: false });
+      lastSeenTurnSeq = state.turnSeq;
     }
 
-    duckMusic(false);
+    handleElimination();
+  } else {
+    state.survives += 1;
+    state.chambersChecked += 1;
 
-    hammer.classList.remove('fired');
-
-    if (isBullet) {
-      chamberEl.classList.add('fired');
-      setMessage(`BANG! ${player.name} drops off the chair — dead in the alley.`, 'danger');
-      player.alive = false;
-
-      if (state.mode === 'multi') {
-        recordMultiTurnAction({ type: 'shot', playerName: player.name, survived: false });
-        lastSeenTurnSeq = state.turnSeq;
-      }
-
-      handleElimination();
+    if (state.mode === 'single') {
+      const reward = getSurviveReward(state.survives);
+      state.winnings += reward;
+      state.pot = getCashOutTotal();
+      const profit = getProfit();
+      const nextReward = getSurviveReward(state.survives + 1);
+      setMessage(
+        `Click! +${formatSol(reward)} added. Total ${formatSol(state.pot)} (+${formatSol(profit)} profit). Next click pays +${formatSol(nextReward)}.`,
+        'success'
+      );
     } else {
-      chamberEl.classList.add('safe');
-      state.survives += 1;
-      state.chambersChecked += 1;
-
-      if (state.mode === 'single') {
-        const reward = getSurviveReward(state.survives);
-        state.winnings += reward;
-        state.pot = getCashOutTotal();
-        const profit = getProfit();
-        const nextReward = getSurviveReward(state.survives + 1);
-        setMessage(
-          `Click! +${formatSol(reward)} added. Total ${formatSol(state.pot)} (+${formatSol(profit)} profit). Next click pays +${formatSol(nextReward)}.`,
-          'success'
-        );
-      } else {
-        setMessage(`Click! ${player.name} survives — shaky hands pass the revolver.`, 'success');
-        recordMultiTurnAction({ type: 'shot', playerName: player.name, survived: true });
-        lastSeenTurnSeq = state.turnSeq;
-      }
-
-      continueAfterSafe();
+      setMessage(`Click! ${player.name} survives — shaky hands pass the revolver.`, 'success');
+      recordMultiTurnAction({ type: 'shot', playerName: player.name, survived: true });
+      lastSeenTurnSeq = state.turnSeq;
     }
-  }, 400);
+
+    await continueAfterSafe();
+  }
 }
 
-function continueAfterSafe() {
+async function continueAfterSafe() {
   state.currentChamber = (state.currentChamber + 1) % CHAMBERS;
 
   if (state.chambersChecked >= CHAMBERS) {
-    reloadCylinder();
+    await reloadCylinder();
     return;
   }
 
@@ -2076,15 +2113,18 @@ function continueAfterSafe() {
     persistMultiGameState();
   }
 
+  setConcealChamberLoadout(true);
   resetChamberVisuals();
+  await spinCylinderVisualOnly();
   renderGameUI();
   finishTurn();
 }
 
-function reloadCylinder() {
+async function reloadCylinder() {
   state.round += 1;
   loadCylinder();
-  spinCylinder();
+  setConcealChamberLoadout(true);
+  await spinCylinder();
   renderGameUI();
   setMessage(`Round ${state.round} — Cylinder reloaded and spun.`);
 
@@ -2164,12 +2204,14 @@ function handleElimination() {
 
   state.round += 1;
   loadCylinder();
-  spinCylinder();
-  advanceToNextPlayer();
-  renderGameUI();
-  setMessage(`Round ${state.round} — ${getCurrentPlayer().name}'s turn.`);
-  persistMultiGameState();
-  finishTurn();
+  setConcealChamberLoadout(true);
+  void spinCylinder().then(() => {
+    advanceToNextPlayer();
+    renderGameUI();
+    setMessage(`Round ${state.round} — ${getCurrentPlayer().name}'s turn.`);
+    persistMultiGameState();
+    finishTurn();
+  });
 }
 
 async function cashOut() {

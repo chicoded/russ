@@ -1808,6 +1808,25 @@ body.in-game .game-inline-nav {
   95% { opacity: 0.85; }
 }
 
+.lobby-invite-link-label {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.78rem;
+}
+
+.lobby-invite-link {
+  display: block;
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.35);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  word-break: break-all;
+  color: var(--text-muted);
+}
+
 .agreement-status.ready {
   border-color: var(--hitman-red);
   border-left: 3px solid var(--hitman-red);

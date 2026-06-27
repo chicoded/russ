@@ -6,7 +6,7 @@ import {
   getPublicKeyString,
   airdropPracticeSol,
 } from './wallet.js';
-import { CONFIG } from './config.js';
+import { loadRuntimeConfig } from './config.js';
 import { initAudio, ensureAudioContext } from './audio.js';
 
 let gameModule = null;
@@ -21,10 +21,13 @@ async function loadGame() {
 
 async function ensureGameInit() {
   if (gameInitPromise) return gameInitPromise;
-  gameInitPromise = loadGame().then((mod) => {
+  gameInitPromise = (async () => {
+    await loadRuntimeConfig();
+    const mod = await loadGame();
     mod.initGame();
+    await mod.maybeAutoJoinFromInviteLink();
     return mod;
-  });
+  })();
   return gameInitPromise;
 }
 

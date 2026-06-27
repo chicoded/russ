@@ -29,17 +29,17 @@ Every push to `main` redeploys automatically. Your live URL will look like `http
 
 ### Multiplayer from different phones
 
-**Easiest (no setup):** Host taps **Invite Friend** → sends the link → guest opens it on their phone.
+**Easiest (no setup):** Host taps **Invite Friend** → sends the link → guest opens it on their phone and is joined automatically after login.
 
-**Join by key only (recommended for production):** Free Supabase sync:
+**Keep host + guest in sync (recommended):** Free Supabase — add these in Vercel → **Settings → Environment Variables**:
 
-1. Create a project at [supabase.com](https://supabase.com)
-2. SQL Editor → run `supabase/lobbies.sql`
-3. Settings → API → copy **Project URL** and **anon public** key
-4. Paste into `js/config.js` → `lobbySync` (and add same vars in Vercel → Settings → Environment Variables)
-5. Redeploy
+| Variable | Value |
+|----------|--------|
+| `SUPABASE_URL` | Your Supabase project URL |
+| `SUPABASE_ANON_KEY` | Supabase anon public key |
+| `PUBLIC_SITE_URL` | Your Vercel URL (optional — auto-detected on Vercel) |
 
-Set `publicSiteUrl` in `config.js` to your Vercel URL so invite links always use the live address.
+Run `supabase/lobbies.sql` once in the Supabase SQL editor, then redeploy.
 
 ## Project structure
 

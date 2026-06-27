@@ -52,3 +52,25 @@ export function getPublicSiteOrigin() {
   }
   return '';
 }
+
+export function getLobbySyncConfig() {
+  return CONFIG.lobbySync || { supabaseUrl: '', supabaseAnonKey: '' };
+}
+
+/** Load Supabase + site URL from Vercel env via /api/config */
+export async function loadRuntimeConfig() {
+  try {
+    const res = await fetch('/api/config', { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.publicSiteUrl) {
+      CONFIG.publicSiteUrl = String(data.publicSiteUrl).replace(/\/$/, '');
+    }
+    if (data.supabaseUrl && data.supabaseAnonKey) {
+      CONFIG.lobbySync.supabaseUrl = data.supabaseUrl;
+      CONFIG.lobbySync.supabaseAnonKey = data.supabaseAnonKey;
+    }
+  } catch {
+    /* offline / local dev */
+  }
+}

@@ -2,7 +2,7 @@
  * Lobby persistence — local cache + Supabase + API for cross-device multiplayer.
  */
 
-import { CONFIG, getPublicSiteOrigin } from './config.js';
+import { CONFIG, getPublicSiteOrigin, getLobbySyncConfig } from './config.js';
 
 const LOBBY_PREFIX = 'rr_open_lobby_';
 const CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -16,8 +16,9 @@ function lobbyKey(code) {
 }
 
 function supabaseConfig() {
-  const url = CONFIG.lobbySync?.supabaseUrl?.trim();
-  const key = CONFIG.lobbySync?.supabaseAnonKey?.trim();
+  const { supabaseUrl, supabaseAnonKey } = getLobbySyncConfig();
+  const url = supabaseUrl?.trim();
+  const key = supabaseAnonKey?.trim();
   return url && key ? { url: url.replace(/\/$/, ''), key } : null;
 }
 

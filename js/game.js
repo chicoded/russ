@@ -29,6 +29,7 @@ import {
   clearLobbyBootstrapFromUrl,
   generateJoinCode,
   getJoinCodeFromUrl,
+  getLobbyBootstrapFromUrl,
   getLastLobbyForWallet,
   hydrateLobbyFromStore,
   isOnlineLobbySyncEnabled,
@@ -1452,6 +1453,51 @@ async function joinWithCodeFromSetup() {
   }
 }
 
+/** Auto-join when a friend opens the host's invite link (?join=…&d=…). */
+export async function maybeAutoJoinFromInviteLink() {
+  const code = getJoinCodeFromUrl();
+  if (!code || !getLobbyBootstrapFromUrl()) return false;
+
+  const wallet = getPublicKeyString();
+  if (!wallet) return false;
+
+  if (!(await loadLobbyFromStore(code))) return false;
+
+  clearJoinCodeFromUrl();
+  clearLobbyBootstrapFromUrl();
+
+  if (isInCurrentLobby()) {
+    showScreen('lobby');
+    renderLobby();
+    return true;
+  }
+
+  if (lobby.status !== 'open') return false;
+
+  const rejoin = getRejoinRecord(wallet);
+  if (!rejoin && lobby.players.length >= lobby.rules.maxPlayers) return false;
+
+  const name = getUsername() || $('#join-setup-name')?.value.trim();
+  if (!name && !rejoin) return false;
+
+  try {
+    const result = await addPlayerToLobby({
+      name: name || rejoin?.name,
+      wallet,
+      isRejoin: !!rejoin,
+    });
+    saveLastLobbyForWallet(wallet, lobby.joinCode);
+    startLobbySync();
+    showScreen('lobby');
+    renderLobby();
+    setTxStatus(`Joined lobby ${lobby.joinCode}`);
+    setTimeout(() => setTxStatus(''), 3000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function openLobby() {
   const hostName = getUsername() || $('#host-name').value.trim() || 'Host';
 
@@ -1678,9 +1724,17 @@ function renderLobby() {
   const keyEl = $('#lobby-join-key');
   if (keyEl) keyEl.textContent = lobby.joinCode || '——';
 
+  const inviteLinkEl = $('#lobby-invite-link');
+  if (inviteLinkEl && lobby.joinCode) {
+    const link = buildJoinLink(lobby.joinCode, serializeLobbyState(lobby));
+    inviteLinkEl.textContent = link;
+    inviteLinkEl.title = link;
+  }
+
   const keyHint = document.querySelector('.lobby-key-hint');
   if (keyHint) {
-    keyHint.innerHTML = 'Share this key so others can join from <strong>Multiplayer → Join with Key</strong>';
+    keyHint.innerHTML =
+      'Tap <strong>Invite Friend</strong> and send the link. Friends on other phones must open that link — the key alone will not work.';
   }
 
   $('#rules-list').innerHTML = renderRulesListHtml(lobby.rules);

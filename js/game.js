@@ -2568,11 +2568,9 @@ function markChamberFired(index) {
 }
 
 /**
- * Reload without a death (single-bullet full rotation only).
- * Multi-bullet games reload only when someone is shot.
+ * Reload when all 6 chambers have been fired (any bullet count 1–5).
  */
 function shouldExhaustReloadCylinder() {
-  if (state.bullets > 1) return false;
   return state.chambersChecked >= CHAMBERS;
 }
 
@@ -2744,6 +2742,7 @@ async function pullTrigger({ auto = false, forced = false } = {}) {
   await delay(900);
 
   markChamberFired(state.currentChamber);
+  state.chambersChecked += 1;
 
   if (isBullet) {
     setMessage(
@@ -2770,7 +2769,6 @@ async function pullTrigger({ auto = false, forced = false } = {}) {
     }
   } else {
     state.survives += 1;
-    state.chambersChecked += 1;
 
     if (state.mode === 'single') {
       const reward = getSurviveReward(state.survives);
@@ -2834,7 +2832,7 @@ async function continueAfterSafe() {
   finishTurn();
 }
 
-/** Cartridge fully exhausted (6 clicks, no death) — reload then next player's turn. */
+/** All 6 chambers fired with no elimination — reload and pass turn. */
 async function reloadExhaustedCylinder() {
   state.round += 1;
   loadCylinder();
@@ -2849,7 +2847,8 @@ async function reloadExhaustedCylinder() {
     stampTurnStart();
     const next = getCurrentPlayer();
     setMessage(
-      `Cartridge clear — all safe chambers spent, bullets used. Reloaded. ${next?.name || 'Next player'}'s turn.`
+      `All ${CHAMBERS} chambers spent — cylinder reloaded (${state.bullets} bullet${state.bullets === 1 ? '' : 's'}). ${next?.name || 'Next player'}'s turn.`,
+      'success'
     );
     persistMultiGameState();
   }
@@ -2863,21 +2862,32 @@ async function reloadExhaustedCylinder() {
   finishTurn();
 }
 
-/** Player eliminated — fresh cylinder, next alive player's turn. */
-async function reloadAfterDeath(eliminatedName, shotAction = null) {
+/** Player eliminated — pass to next alive player; reload only if all chambers spent. */
+async function continueAfterDeath(eliminatedName, shotAction = null) {
+  const needsReload = shouldExhaustReloadCylinder();
+
+  if (!needsReload) {
+    state.currentChamber = (state.currentChamber + 1) % CHAMBERS;
+  }
+
   releaseMultiTurnLock();
   localPullInFlight = false;
   advanceToNextPlayer();
   ensureCurrentPlayerAlive();
-  state.round += 1;
-  loadCylinder();
-  setConcealChamberLoadout(true);
   stampTurnStart();
   const next = getCurrentPlayer();
-  setMessage(
-    `${eliminatedName} is OUT. Fresh cylinder loaded — ${next?.name || 'Next player'}'s turn.`,
-    'danger'
-  );
+
+  if (needsReload) {
+    state.round += 1;
+    loadCylinder();
+    setConcealChamberLoadout(true);
+    setMessage(
+      `${eliminatedName} is OUT. All ${CHAMBERS} chambers spent — cylinder reloaded (${state.bullets} bullet${state.bullets === 1 ? '' : 's'}). ${next?.name || 'Next player'}'s turn.`,
+      'danger'
+    );
+  } else {
+    setMessage(`${eliminatedName} is OUT — ${next?.name || 'Next player'}'s turn.`, 'danger');
+  }
 
   if (shotAction) {
     commitMultiTurnAction(shotAction);
@@ -2885,7 +2895,11 @@ async function reloadAfterDeath(eliminatedName, shotAction = null) {
   }
 
   persistMultiGameState();
-  await spinCylinder();
+
+  if (needsReload) {
+    await spinCylinder();
+  }
+
   renderGameUI();
   finishTurn();
 }
@@ -2976,7 +2990,7 @@ async function handleElimination(eliminatedPlayer, { shotAction = null } = {}) {
     return;
   }
 
-  await reloadAfterDeath(outName, shotAction);
+  await continueAfterDeath(outName, shotAction);
 
   if (iWasEliminated) {
     const bet = eliminatedPlayer?.bet || state.players.find((p) => p.wallet === eliminatedWallet)?.bet || 0;

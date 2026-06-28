@@ -867,6 +867,21 @@ function showForfeitResultScreen(betSol) {
   showScreen('result');
 }
 
+function showEliminatedResultScreen(betSol) {
+  const icon = $('#result-icon');
+  const title = $('#result-title');
+  const msg = $('#result-message');
+  const amount = $('#result-amount');
+
+  icon.textContent = '💀';
+  title.textContent = 'Eliminated';
+  msg.textContent = 'You hit a bullet. Your stake stays in the pot — the match continues for everyone else.';
+  amount.style.display = 'block';
+  amount.style.color = 'var(--danger)';
+  amount.textContent = `-${formatSol(betSol)}`;
+  showScreen('result');
+}
+
 async function maybeSettleWinnerOnChain(winner) {
   if (!lobby.gamePda || !winner?.wallet) return;
 
@@ -901,6 +916,7 @@ async function forfeitActiveMultiGame({ skipConfirm = false } = {}) {
   }
 
   me.alive = false;
+  markPlayerEliminated(me.wallet);
 
   if (getCurrentPlayer()?.wallet === wallet) {
     advanceToNextPlayer();
@@ -991,12 +1007,19 @@ function markPlayerEliminated(wallet) {
   if (lp) lp.alive = false;
 }
 
+function syncEliminatedFromPlayers(players = []) {
+  for (const p of players) {
+    if (p.wallet && !p.alive) markPlayerEliminated(p.wallet);
+  }
+}
+
 function markPlayerEliminatedByName(name, players = state.players) {
   const p = players.find((pl) => pl.name === name);
   if (p?.wallet) markPlayerEliminated(p.wallet);
 }
 
 function mergePlayersFromSnapshot(gsPlayers = []) {
+  syncEliminatedFromPlayers(gsPlayers);
   return gsPlayers.map((p) => ({
     ...p,
     alive: eliminatedWallets.has(p.wallet) ? false : !!p.alive,
@@ -1031,11 +1054,19 @@ function releaseMultiTurnLock() {
 }
 
 function resolveShootingWallet(gs) {
-  if (gs.shootingWallet) return gs.shootingWallet;
-  if (gs.isProcessing && gs.players?.[gs.currentPlayerIndex]?.wallet) {
-    return gs.players[gs.currentPlayerIndex].wallet;
-  }
-  return null;
+  const wallet =
+    gs.shootingWallet ||
+    (gs.isProcessing && gs.players?.[gs.currentPlayerIndex]?.wallet) ||
+    null;
+  if (!wallet) return null;
+
+  const eliminated = new Set(gs.eliminatedWallets || []);
+  if (eliminated.has(wallet)) return null;
+
+  const shooter = gs.players?.find((p) => p.wallet === wallet);
+  if (shooter && !shooter.alive) return null;
+
+  return wallet;
 }
 
 function applyRemoteShotFlags(gs) {
@@ -1322,6 +1353,12 @@ function isMyTurn() {
   return !!(player?.alive && player.wallet === getPublicKeyString());
 }
 
+function isLocallyEliminatedFromMulti() {
+  const wallet = getPublicKeyString();
+  if (!wallet || state.gameOver || state.mode !== 'multi') return false;
+  return eliminatedWallets.has(wallet);
+}
+
 function isPlayerInStoredGame(stored, wallet) {
   return stored.players?.some((p) => p.wallet === wallet);
 }
@@ -1411,7 +1448,6 @@ async function syncMultiGameFromStore(gs) {
 
   const wallet = getPublicKeyString();
   const isOnGameScreen = gameScreen.classList.contains('active');
-  const isOnResultScreen = resultScreen.classList.contains('active');
 
   const actor = gs.players[gs.currentPlayerIndex];
   const iAmActor = actor?.wallet === wallet;
@@ -1480,11 +1516,11 @@ async function syncMultiGameFromStore(gs) {
   lobby.gameState = latestGs;
 
   if (latestGs.gameOver) {
-    if (!isOnResultScreen) showMultiResultFromState(latestGs);
+    showMultiResultFromState(latestGs);
     return;
   }
 
-  if (!isOnGameScreen) {
+  if (!isOnGameScreen && !isLocallyEliminatedFromMulti()) {
     showScreen('game');
     refreshWalletUI();
   }
@@ -1520,10 +1556,14 @@ function showMultiResultFromState(gs) {
   showScreen('result');
 }
 
-function recordMultiTurnAction(action) {
+function commitMultiTurnAction(action) {
   state.turnSeq += 1;
   state.lastAction = { ...action, seq: state.turnSeq, actorWallet: getPublicKeyString() };
   lastLocallyActedTurnSeq = state.turnSeq;
+}
+
+function recordMultiTurnAction(action) {
+  commitMultiTurnAction(action);
   persistMultiGameState();
 }
 
@@ -2519,12 +2559,17 @@ function getCurrentPlayer() {
 }
 
 function advanceToNextPlayer() {
-  let next = state.currentPlayerIndex;
-  do {
-    next = (next + 1) % state.players.length;
-  } while (!state.players[next].alive && next !== state.currentPlayerIndex);
+  const aliveCount = getAlivePlayers().length;
+  if (aliveCount === 0) return;
 
-  state.currentPlayerIndex = next;
+  let next = state.currentPlayerIndex;
+  for (let i = 0; i < state.players.length; i += 1) {
+    next = (next + 1) % state.players.length;
+    if (state.players[next].alive) {
+      state.currentPlayerIndex = next;
+      return;
+    }
+  }
 }
 
 async function pullTrigger({ auto = false, forced = false } = {}) {
@@ -2637,17 +2682,18 @@ async function pullTrigger({ auto = false, forced = false } = {}) {
     markPlayerEliminated(player.wallet);
 
     if (state.mode === 'multi') {
-      recordMultiTurnAction({
-        type: 'shot',
-        playerName: player.name,
-        survived: false,
-        aliveNamesBefore: aliveBefore,
-        eliminatedCountBefore: eliminatedBefore,
+      await handleElimination(player, {
+        shotAction: {
+          type: 'shot',
+          playerName: player.name,
+          survived: false,
+          aliveNamesBefore: aliveBefore,
+          eliminatedCountBefore: eliminatedBefore,
+        },
       });
-      lastSeenTurnSeq = state.turnSeq;
+    } else {
+      await handleElimination(player);
     }
-
-    await handleElimination(player);
   } else {
     state.survives += 1;
     state.chambersChecked += 1;
@@ -2744,20 +2790,26 @@ async function reloadExhaustedCylinder() {
 }
 
 /** Player eliminated — fresh cylinder, next alive player's turn. */
-async function reloadAfterDeath(eliminatedName) {
-  loadCylinder();
-  setConcealChamberLoadout(true);
+async function reloadAfterDeath(eliminatedName, shotAction = null) {
   releaseMultiTurnLock();
   localPullInFlight = false;
   advanceToNextPlayer();
   ensureCurrentPlayerAlive();
   state.round += 1;
+  loadCylinder();
+  setConcealChamberLoadout(true);
   stampTurnStart();
   const next = getCurrentPlayer();
   setMessage(
     `${eliminatedName} is OUT. Fresh cylinder loaded — ${next?.name || 'Next player'}'s turn.`,
     'danger'
   );
+
+  if (shotAction) {
+    commitMultiTurnAction(shotAction);
+    lastSeenTurnSeq = state.turnSeq;
+  }
+
   persistMultiGameState();
   await spinCylinder();
   renderGameUI();
@@ -2768,7 +2820,7 @@ async function reloadCylinder() {
   await reloadExhaustedCylinder();
 }
 
-async function handleElimination(eliminatedPlayer) {
+async function handleElimination(eliminatedPlayer, { shotAction = null } = {}) {
   renderGameUI();
 
   if (state.mode === 'single') {
@@ -2785,12 +2837,23 @@ async function handleElimination(eliminatedPlayer) {
 
   const alive = getAlivePlayers();
   const outName = eliminatedPlayer?.name || getCurrentPlayer()?.name || 'Player';
+  const eliminatedWallet = eliminatedPlayer?.wallet || null;
+  const iWasEliminated = eliminatedWallet && eliminatedWallet === getPublicKeyString();
 
   if (alive.length === 1) {
     const winner = alive[0];
     state.winnerWallet = winner.wallet;
     state.resultMessage = `${winner.name} wins the entire pot — last one standing!`;
     state.gameOver = true;
+    releaseMultiTurnLock();
+    localPullInFlight = false;
+
+    if (shotAction) {
+      commitMultiTurnAction(shotAction);
+      persistMultiGameState();
+      lastSeenTurnSeq = state.turnSeq;
+    }
+
     recordMultiTurnAction({
       type: 'win',
       winnerName: winner.name,
@@ -2829,12 +2892,23 @@ async function handleElimination(eliminatedPlayer) {
   if (alive.length === 0) {
     state.gameOver = true;
     state.resultMessage = 'Everyone is out. No winner this round.';
+    releaseMultiTurnLock();
+    localPullInFlight = false;
+    if (shotAction) {
+      commitMultiTurnAction(shotAction);
+    }
     persistMultiGameState();
     endGame(null, state.resultMessage);
     return;
   }
 
-  await reloadAfterDeath(outName);
+  await reloadAfterDeath(outName, shotAction);
+
+  if (iWasEliminated) {
+    const bet = eliminatedPlayer?.bet || state.players.find((p) => p.wallet === eliminatedWallet)?.bet || 0;
+    recordGameHistory(null, 'Eliminated during game — stake forfeited.', { forfeit: true });
+    showEliminatedResultScreen(bet);
+  }
 }
 
 async function cashOut() {

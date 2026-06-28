@@ -319,11 +319,8 @@ export function removeOpenLobby(joinCode) {
 }
 
 export function buildJoinLink(joinCode) {
-  const origin = getPublicSiteOrigin() || window.location.origin;
-  const url = new URL(window.location.pathname || '/', origin);
-  url.searchParams.set('join', joinCode.toUpperCase());
-  url.hash = '';
-  return url.toString();
+  const origin = (getPublicSiteOrigin() || 'https://russ-blush.vercel.app').replace(/\/$/, '');
+  return `${origin}/?join=${encodeURIComponent(joinCode.toUpperCase())}`;
 }
 
 export function getJoinCodeFromUrl() {

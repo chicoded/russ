@@ -59,18 +59,22 @@ export function getLobbySyncConfig() {
 
 /** Load Supabase + site URL from Vercel env via /api/config */
 export async function loadRuntimeConfig() {
+  const canonicalSite = CONFIG.publicSiteUrl?.trim().replace(/\/$/, '');
   try {
     const res = await fetch('/api/config', { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
-    if (data.publicSiteUrl) {
-      CONFIG.publicSiteUrl = String(data.publicSiteUrl).replace(/\/$/, '');
+    const fromEnv = data.publicSiteUrl?.trim().replace(/\/$/, '');
+    if (fromEnv) {
+      CONFIG.publicSiteUrl = fromEnv;
+    } else if (canonicalSite) {
+      CONFIG.publicSiteUrl = canonicalSite;
     }
     if (data.supabaseUrl && data.supabaseAnonKey) {
       CONFIG.lobbySync.supabaseUrl = data.supabaseUrl;
       CONFIG.lobbySync.supabaseAnonKey = data.supabaseAnonKey;
     }
   } catch {
-    /* offline / local dev — keep values from config.js */
+    if (canonicalSite) CONFIG.publicSiteUrl = canonicalSite;
   }
 }

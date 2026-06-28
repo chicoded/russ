@@ -10,14 +10,14 @@ export const CONFIG = {
    * get the correct address. Example: 'https://russ-xxxx.vercel.app'
    * Leave empty to use the current browser URL.
    */
-  publicSiteUrl: '',
+  publicSiteUrl: 'https://russ-blush.vercel.app',
   /**
    * Online lobby sync — free Supabase project (see supabase/lobbies.sql).
-   * Paste URL + anon key here AND in Vercel env vars for cross-phone join by key.
+   * Publishable key is safe in client code; also set SUPABASE_* in Vercel env.
    */
   lobbySync: {
-    supabaseUrl: '',
-    supabaseAnonKey: '',
+    supabaseUrl: 'https://kjshqptrommztglvordj.supabase.co',
+    supabaseAnonKey: 'sb_publishable_b0KWQSDfvIBuT24EKZ_YOw_2mUxXxd4',
   },
 };
 

@@ -2285,7 +2285,7 @@ async function pullTrigger({ auto = false } = {}) {
       lastSeenTurnSeq = state.turnSeq;
     }
 
-    handleElimination();
+    await handleElimination(player);
   } else {
     state.survives += 1;
     state.chambersChecked += 1;
@@ -2324,8 +2324,9 @@ async function pullTrigger({ auto = false } = {}) {
 async function continueAfterSafe() {
   state.currentChamber = (state.currentChamber + 1) % CHAMBERS;
 
+  // All 6 chambers fired with no death — must reload before continuing
   if (state.chambersChecked >= CHAMBERS) {
-    await reloadCylinder();
+    await reloadExhaustedCylinder();
     return;
   }
 
@@ -2333,6 +2334,7 @@ async function continueAfterSafe() {
     advanceToNextPlayer();
     stampTurnStart();
     persistMultiGameState();
+    setMessage(`Click! ${getCurrentPlayer()?.name}'s turn — pull the trigger.`, 'success');
   }
 
   setConcealChamberLoadout(true);
@@ -2342,25 +2344,52 @@ async function continueAfterSafe() {
   finishTurn();
 }
 
-async function reloadCylinder() {
+/** Cartridge fully exhausted (6 clicks, no death) — reload then next player's turn. */
+async function reloadExhaustedCylinder() {
   state.round += 1;
   loadCylinder();
   setConcealChamberLoadout(true);
-  await spinCylinder();
-  renderGameUI();
-  setMessage(`Round ${state.round} — Cylinder reloaded and spun.`);
 
   if (state.mode === 'multi') {
     advanceToNextPlayer();
     stampTurnStart();
-    renderGameUI();
-    persistMultiGameState();
   }
 
+  await spinCylinder();
+  const next = getCurrentPlayer();
+  setMessage(
+    state.mode === 'multi'
+      ? `Cartridge spent — reloaded. ${next?.name || 'Next player'}'s turn.`
+      : `Round ${state.round} — Cylinder reloaded and spun.`
+  );
+  renderGameUI();
+  if (state.mode === 'multi') persistMultiGameState();
   finishTurn();
 }
 
-function handleElimination() {
+/** Player eliminated — fresh cylinder, next alive player's turn. */
+async function reloadAfterDeath(eliminatedName) {
+  loadCylinder();
+  setConcealChamberLoadout(true);
+  advanceToNextPlayer();
+  stampTurnStart();
+  await spinCylinder();
+  const next = getCurrentPlayer();
+  setMessage(
+    `${eliminatedName} is OUT. Fresh cylinder loaded — ${next?.name || 'Next player'}'s turn.`,
+    'danger'
+  );
+  state.round += 1;
+  renderGameUI();
+  persistMultiGameState();
+  finishTurn();
+}
+
+async function reloadCylinder() {
+  await reloadExhaustedCylinder();
+}
+
+async function handleElimination(eliminatedPlayer) {
   renderGameUI();
 
   if (state.mode === 'single') {
@@ -2376,11 +2405,12 @@ function handleElimination() {
   }
 
   const alive = getAlivePlayers();
+  const outName = eliminatedPlayer?.name || getCurrentPlayer()?.name || 'Player';
 
   if (alive.length === 1) {
     const winner = alive[0];
     state.winnerWallet = winner.wallet;
-    state.resultMessage = `${winner.name} wins the entire pot — paid from smart contract!`;
+    state.resultMessage = `${winner.name} wins the entire pot — last one standing!`;
     state.gameOver = true;
     recordMultiTurnAction({
       type: 'win',
@@ -2413,7 +2443,7 @@ function handleElimination() {
         return;
       }
     }
-    finishWin();
+    await finishWin();
     return;
   }
 
@@ -2425,17 +2455,7 @@ function handleElimination() {
     return;
   }
 
-  state.round += 1;
-  loadCylinder();
-  setConcealChamberLoadout(true);
-  void spinCylinder().then(() => {
-    advanceToNextPlayer();
-    stampTurnStart();
-    renderGameUI();
-    setMessage(`Round ${state.round} — ${getCurrentPlayer().name}'s turn.`);
-    persistMultiGameState();
-    finishTurn();
-  });
+  await reloadAfterDeath(outName);
 }
 
 async function cashOut() {

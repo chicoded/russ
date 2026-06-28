@@ -1105,12 +1105,50 @@ function markPlayerEliminatedByName(name, players = state.players) {
   if (p?.wallet) markPlayerEliminated(p.wallet);
 }
 
-function mergePlayersFromSnapshot(gsPlayers = []) {
+function mergePlayersFromSnapshot(gsPlayers = [], gs = null) {
   syncEliminatedFromPlayers(gsPlayers);
+  for (const wallet of gs?.eliminatedWallets || []) {
+    eliminatedWallets.add(wallet);
+  }
   return gsPlayers.map((p) => ({
     ...p,
     alive: eliminatedWallets.has(p.wallet) ? false : !!p.alive,
   }));
+}
+
+function maybeEndMultiIfOneAlive() {
+  if (state.mode !== 'multi' || state.gameOver) return null;
+  const alive = getAlivePlayers();
+  if (alive.length !== 1) return null;
+
+  const winner = alive[0];
+  state.winnerWallet = winner.wallet;
+  state.resultMessage = `${winner.name} wins the entire pot — last one standing!`;
+  state.gameOver = true;
+  releaseMultiTurnLock();
+  localPullInFlight = false;
+  return winner;
+}
+
+/** Persist death + turn handoff to cloud before cinema so remotes never resurrect the victim. */
+async function persistMultiDeathAndHandoff(shotAction) {
+  const alive = getAlivePlayers();
+
+  if (alive.length <= 1) {
+    commitMultiTurnAction(shotAction);
+    lastSeenTurnSeq = state.turnSeq;
+    await persistMultiGameStateAsync();
+    return alive.length === 1 ? 'win' : 'no_winner';
+  }
+
+  advanceToNextPlayer();
+  ensureCurrentPlayerAlive();
+  releaseMultiTurnLock();
+
+  commitMultiTurnAction(shotAction);
+  lastSeenTurnSeq = state.turnSeq;
+  await persistMultiGameStateAsync();
+  return 'continue';
 }
 
 function ensureCurrentPlayerAlive() {
@@ -1224,6 +1262,7 @@ function applyGameStateSnapshot(gs) {
   if (!gs) return;
 
   const prevTurnKey = `${state.turnSeq}-${state.currentPlayerIndex}`;
+  const protectedEliminated = new Set(eliminatedWallets);
 
   state.mode = 'multi';
   state.bullets = gs.bullets;
@@ -1236,7 +1275,7 @@ function applyGameStateSnapshot(gs) {
   if (gs.lastAction?.type === 'forfeit') {
     markPlayerEliminatedByName(gs.lastAction.playerName, gs.players);
   }
-  state.players = mergePlayersFromSnapshot(gs.players);
+  state.players = mergePlayersFromSnapshot(gs.players, gs);
   state.pot = gs.pot;
   state.round = gs.round;
   state.currentPlayerIndex = gs.currentPlayerIndex;
@@ -1256,9 +1295,19 @@ function applyGameStateSnapshot(gs) {
 
   applyRemoteShotFlags(gs);
 
+  for (const wallet of protectedEliminated) {
+    markPlayerEliminated(wallet);
+  }
+
   ensureCurrentPlayerAlive();
   syncLobbyPlayersAliveFromGame();
   reconcileMultiTurnLock();
+
+  const syncedWinner = !state.gameOver ? maybeEndMultiIfOneAlive() : null;
+  if (syncedWinner && lobby.active && lobby.joinCode) {
+    lobby.status = 'finished';
+    persistMultiGameState();
+  }
 
   const turnKey = `${state.turnSeq}-${state.currentPlayerIndex}`;
   const turnHandoff = turnKey !== prevTurnKey && turnKey !== lastSeenPlayerTurnKey;
@@ -1619,6 +1668,12 @@ async function syncMultiGameFromStore(gs) {
     return;
   }
 
+  const loneWinner = maybeEndMultiIfOneAlive();
+  if (loneWinner) {
+    showMultiResultFromState(buildGameStateSnapshot());
+    return;
+  }
+
   if (!isOnGameScreen && !isLocallyEliminatedFromMulti()) {
     showScreen('game');
     refreshWalletUI();
@@ -1717,7 +1772,9 @@ function mergeLobbyFromStore(stored) {
           gs?.currentPlayerIndex === localGs?.currentPlayerIndex &&
           gs?.shootingWallet === localGs?.shootingWallet &&
           !!gs?.isProcessing === !!localGs?.isProcessing &&
-          gs?.shotVisual?.id === localGs?.shotVisual?.id;
+          gs?.shotVisual?.id === localGs?.shotVisual?.id &&
+          !!gs?.gameOver === !!localGs?.gameOver &&
+          (gs?.eliminatedWallets?.length || 0) === (localGs?.eliminatedWallets?.length || 0);
     if (sameGame) return;
   }
 
@@ -2745,30 +2802,21 @@ async function pullTrigger({ auto = false, forced = false } = {}) {
   const aliveBefore = getAlivePlayers().map((p) => p.name);
   const eliminatedBefore = state.players.filter((p) => !p.alive).length;
 
-  if (state.mode === 'multi') {
-    duckMusic(true);
-    const { playGangCinema } = await getCinema();
-    await playGangCinema({
-      playerName: player.name,
-      survived: !isBullet,
-      aliveNames: aliveBefore,
-      eliminatedCount: eliminatedBefore,
-      totalPlayers: state.players.length,
-    });
-  } else {
-    duckMusic(true);
-    const { playShotCinema } = await getCinema();
-    await playShotCinema({ playerName: player.name, survived: !isBullet });
-  }
-
-  duckMusic(false);
-  hammer.classList.remove('fired');
-
-  revealChamberResult(chamberEl, isBullet ? 'bullet' : 'empty');
-  await delay(900);
-
   markChamberFired(state.currentChamber);
   state.chambersChecked += 1;
+
+  const multiShotAction =
+    state.mode === 'multi'
+      ? {
+          type: 'shot',
+          playerName: player.name,
+          survived: !isBullet,
+          aliveNamesBefore: aliveBefore,
+          eliminatedCountBefore: eliminatedBefore,
+        }
+      : null;
+
+  let deathHandoff = null;
 
   if (isBullet) {
     setMessage(
@@ -2781,15 +2829,43 @@ async function pullTrigger({ auto = false, forced = false } = {}) {
     markPlayerEliminated(player.wallet);
 
     if (state.mode === 'multi') {
-      await handleElimination(player, {
-        shotAction: {
-          type: 'shot',
-          playerName: player.name,
-          survived: false,
-          aliveNamesBefore: aliveBefore,
-          eliminatedCountBefore: eliminatedBefore,
-        },
-      });
+      deathHandoff = await persistMultiDeathAndHandoff(multiShotAction);
+    }
+  }
+
+  if (state.mode === 'multi') {
+    duckMusic(true);
+    const { playGangCinema } = await getCinema();
+    await playGangCinema({
+      playerName: player.name,
+      survived: !isBullet,
+      aliveNames: aliveBefore,
+      eliminatedCount: eliminatedBefore,
+      totalPlayers: state.players.length,
+    });
+    duckMusic(false);
+  } else {
+    duckMusic(true);
+    const { playShotCinema } = await getCinema();
+    await playShotCinema({ playerName: player.name, survived: !isBullet });
+    duckMusic(false);
+  }
+
+  hammer.classList.remove('fired');
+
+  revealChamberResult(chamberEl, isBullet ? 'bullet' : 'empty');
+  await delay(900);
+
+  if (isBullet) {
+    if (state.mode === 'multi') {
+      if (deathHandoff === 'win' || deathHandoff === 'no_winner') {
+        await handleElimination(player, {
+          shotAction: multiShotAction,
+          deathAlreadyCommitted: true,
+        });
+      } else {
+        await continueAfterDeath(player.name, multiShotAction, { deathAlreadyCommitted: true });
+      }
     } else {
       await handleElimination(player);
     }
@@ -2889,7 +2965,11 @@ async function reloadExhaustedCylinder() {
 }
 
 /** Player eliminated — pass to next alive player; reload only if all chambers spent. */
-async function continueAfterDeath(eliminatedName, shotAction = null) {
+async function continueAfterDeath(
+  eliminatedName,
+  shotAction = null,
+  { deathAlreadyCommitted = false } = {}
+) {
   const needsReload = shouldExhaustReloadCylinder();
 
   if (!needsReload) {
@@ -2898,9 +2978,13 @@ async function continueAfterDeath(eliminatedName, shotAction = null) {
 
   releaseMultiTurnLock();
   localPullInFlight = false;
-  advanceToNextPlayer();
-  ensureCurrentPlayerAlive();
-  stampTurnStart();
+
+  if (!deathAlreadyCommitted) {
+    advanceToNextPlayer();
+    ensureCurrentPlayerAlive();
+    stampTurnStart();
+  }
+
   const next = getCurrentPlayer();
 
   if (needsReload) {
@@ -2915,7 +2999,7 @@ async function continueAfterDeath(eliminatedName, shotAction = null) {
     setMessage(`${eliminatedName} is OUT — ${next?.name || 'Next player'}'s turn.`, 'danger');
   }
 
-  if (shotAction) {
+  if (shotAction && !deathAlreadyCommitted) {
     commitMultiTurnAction(shotAction);
     lastSeenTurnSeq = state.turnSeq;
   }
@@ -2928,13 +3012,21 @@ async function continueAfterDeath(eliminatedName, shotAction = null) {
 
   renderGameUI();
   finishTurn();
+
+  if (deathAlreadyCommitted && shotAction?.playerName) {
+    const victim = state.players.find((p) => p.name === shotAction.playerName);
+    if (victim?.wallet === getPublicKeyString() && !victim.alive) {
+      recordGameHistory(null, 'Eliminated during game — stake forfeited.', { forfeit: true });
+      finishLocalMultiExitScreen({ bet: victim.bet || 0 }, { eliminated: true });
+    }
+  }
 }
 
 async function reloadCylinder() {
   await reloadExhaustedCylinder();
 }
 
-async function handleElimination(eliminatedPlayer, { shotAction = null } = {}) {
+async function handleElimination(eliminatedPlayer, { shotAction = null, deathAlreadyCommitted = false } = {}) {
   if (state.mode === 'single') {
     renderGameUI();
     const finishLoss = () => endGame(null, 'You hit a bullet. Stake forfeited on-chain.');
@@ -2961,7 +3053,7 @@ async function handleElimination(eliminatedPlayer, { shotAction = null } = {}) {
     releaseMultiTurnLock();
     localPullInFlight = false;
 
-    if (shotAction) {
+    if (shotAction && !deathAlreadyCommitted) {
       commitMultiTurnAction(shotAction);
       persistMultiGameState();
       lastSeenTurnSeq = state.turnSeq;
@@ -2995,10 +3087,18 @@ async function handleElimination(eliminatedPlayer, { shotAction = null } = {}) {
         )
           .then(finishWin)
           .catch(finishWin);
+        if (iWasEliminated) {
+          recordGameHistory(null, 'Eliminated during game — stake forfeited.', { forfeit: true });
+          finishLocalMultiExitScreen({ bet: eliminatedPlayer?.bet || 0 }, { eliminated: true });
+        }
         return;
       }
     }
     await finishWin();
+    if (iWasEliminated) {
+      recordGameHistory(null, 'Eliminated during game — stake forfeited.', { forfeit: true });
+      finishLocalMultiExitScreen({ bet: eliminatedPlayer?.bet || 0 }, { eliminated: true });
+    }
     return;
   }
 
@@ -3007,7 +3107,7 @@ async function handleElimination(eliminatedPlayer, { shotAction = null } = {}) {
     state.resultMessage = 'Everyone is out. No winner this round.';
     releaseMultiTurnLock();
     localPullInFlight = false;
-    if (shotAction) {
+    if (shotAction && !deathAlreadyCommitted) {
       commitMultiTurnAction(shotAction);
     }
     persistMultiGameState();
@@ -3015,12 +3115,8 @@ async function handleElimination(eliminatedPlayer, { shotAction = null } = {}) {
     return;
   }
 
-  await continueAfterDeath(outName, shotAction);
-
-  if (iWasEliminated) {
-    const bet = eliminatedPlayer?.bet || state.players.find((p) => p.wallet === eliminatedWallet)?.bet || 0;
-    recordGameHistory(null, 'Eliminated during game — stake forfeited.', { forfeit: true });
-    finishLocalMultiExitScreen({ bet }, { eliminated: true });
+  if (!deathAlreadyCommitted) {
+    await continueAfterDeath(outName, shotAction);
   }
 }
 

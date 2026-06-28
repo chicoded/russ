@@ -71,6 +71,6 @@ export async function loadRuntimeConfig() {
       CONFIG.lobbySync.supabaseAnonKey = data.supabaseAnonKey;
     }
   } catch {
-    /* offline / local dev */
+    /* offline / local dev — keep values from config.js */
   }
 }

@@ -39,6 +39,7 @@ import {
   resolveOpenLobby,
   saveLastLobbyForWallet,
   saveOpenLobby,
+  saveOpenLobbyAsync,
   serializeLobbyState,
   subscribeLobbyUpdates,
 } from './lobby-store.js';
@@ -698,10 +699,10 @@ async function renderJoinRulesPreview() {
   preview.classList.remove('hidden');
   preview.innerHTML = '<p class="hint">Looking up lobby…</p>';
 
-  const stored = await resolveOpenLobby(code, { retryMs: isOnlineLobbySyncEnabled() ? 0 : 8000 });
+  const stored = await resolveOpenLobby(code, { retryMs: 6000 });
   if (!stored) {
     preview.innerHTML =
-      '<p class="hint">Lobby not found yet. Ask the host to tap <strong>Invite Friend</strong> and send you that link — opening the link on your phone will join automatically.</p>';
+      '<p class="hint">Lobby not found. Check the 6-character key (no O or I — use numbers 2–9). Host must create the lobby on <strong>russ-blush.vercel.app</strong> first.</p>';
     return;
   }
 
@@ -919,6 +920,12 @@ function persistLobby() {
   if (!lobby.active || !lobby.joinCode) return;
   pruneDepartedPlayers();
   saveOpenLobby(lobby.joinCode, serializeLobbyState(lobby));
+}
+
+async function persistLobbyRemote() {
+  if (!lobby.active || !lobby.joinCode) return;
+  pruneDepartedPlayers();
+  await saveOpenLobbyAsync(lobby.joinCode, serializeLobbyState(lobby));
 }
 
 function buildGameStateSnapshot() {
@@ -1291,12 +1298,13 @@ async function loadLobbyFromStore(code) {
     return false;
   }
 
-  const stored = await resolveOpenLobby(normalized, { retryMs: 10000 });
+  const stored = await resolveOpenLobby(normalized, { retryMs: 8000 });
   if (!stored) {
     alert(
       'Lobby not found.\n\n' +
-        'Ask the host to tap **Invite Friend** on their phone and send you that link.\n' +
-        'Do not type the key manually — open the shared link directly.'
+        '• Double-check the 6-character key (letters A–Z and 2–9 only — no O or I)\n' +
+        '• Host must create the lobby on russ-blush.vercel.app first\n' +
+        '• Or ask host to tap Invite Friend and open that link instead'
     );
     return false;
   }
@@ -1360,7 +1368,7 @@ async function addPlayerToLobby({ name, wallet, isRejoin = false }) {
     }
 
     lobby.departedPlayers = lobby.departedPlayers.filter((p) => p.wallet !== wallet);
-    persistLobby();
+    await persistLobbyRemote();
     return { rejoined: true, isHost: !!departed.isHost };
   }
 
@@ -1380,7 +1388,7 @@ async function addPlayerToLobby({ name, wallet, isRejoin = false }) {
     wallet,
   });
 
-  persistLobby();
+  await persistLobbyRemote();
   return { rejoined: false, isHost: false };
 }
 
@@ -1544,7 +1552,7 @@ async function openLobby() {
     }];
     lobby.departedPlayers = [];
 
-    persistLobby();
+    await persistLobbyRemote();
     saveLastLobbyForWallet(getPublicKeyString(), joinCode);
     startLobbySync();
     renderLobby();

@@ -110,17 +110,38 @@ async function pushSupabaseLobby(joinCode, lobbyData) {
   if (!sb || !code || !lobbyData) return false;
 
   const payload = { ...lobbyData, joinCode: code, updatedAt: Date.now() };
+  const row = {
+    code,
+    payload,
+    updated_at: new Date().toISOString(),
+  };
+
+  const upsertHeaders = {
+    ...supabaseHeaders(sb.key),
+    Prefer: 'resolution=merge-duplicates,return=minimal',
+  };
+
   try {
-    const res = await fetch(`${sb.url}/rest/v1/lobbies`, {
+    const upsert = await fetch(`${sb.url}/rest/v1/lobbies?on_conflict=code`, {
       method: 'POST',
-      headers: { ...supabaseHeaders(sb.key), Prefer: 'resolution=merge-duplicates' },
-      body: JSON.stringify({
-        code,
-        payload,
-        updated_at: new Date().toISOString(),
-      }),
+      headers: upsertHeaders,
+      body: JSON.stringify(row),
     });
-    return res.ok || res.status === 409;
+    if (upsert.ok) return true;
+
+    const patch = await fetch(`${sb.url}/rest/v1/lobbies?code=eq.${encodeURIComponent(code)}`, {
+      method: 'PATCH',
+      headers: upsertHeaders,
+      body: JSON.stringify({ payload, updated_at: row.updated_at }),
+    });
+    if (patch.ok) return true;
+
+    const insert = await fetch(`${sb.url}/rest/v1/lobbies`, {
+      method: 'POST',
+      headers: upsertHeaders,
+      body: JSON.stringify(row),
+    });
+    return insert.ok;
   } catch {
     return false;
   }
@@ -281,6 +302,13 @@ export async function resolveOpenLobby(joinCode, { retryMs = 0 } = {}) {
 export function saveOpenLobby(joinCode, lobbyData) {
   const payload = writeLocalLobby(joinCode, lobbyData);
   void pushRemoteLobby(joinCode, payload);
+  return payload;
+}
+
+/** Save locally and wait for cloud sync (use when host creates or updates lobby). */
+export async function saveOpenLobbyAsync(joinCode, lobbyData) {
+  const payload = writeLocalLobby(joinCode, lobbyData);
+  await pushRemoteLobby(joinCode, payload);
   return payload;
 }
 

@@ -1927,6 +1927,42 @@ body.in-game .game-inline-nav {
   animation: turnPulse 2s ease-in-out infinite;
 }
 
+.turn-countdown {
+  margin-top: 0.5rem;
+  font-family: var(--font-contract);
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  text-align: center;
+  min-height: 1.4rem;
+}
+
+#game-screen.multi-waiting .game-center {
+  opacity: 0.42;
+  filter: grayscale(0.25) saturate(0.7);
+  transition: opacity 0.35s, filter 0.35s;
+}
+
+#game-screen.multi-waiting .turn-indicator-wrap,
+#game-screen.multi-waiting .players-list {
+  opacity: 1;
+  filter: none;
+}
+
+#game-screen.multi-your-turn .game-center {
+  opacity: 1;
+  filter: none;
+}
+
+#game-screen.multi-your-turn .pull-trigger-btn,
+#game-screen.multi-your-turn #pull-trigger-btn {
+  box-shadow: 0 0 28px rgba(224, 32, 32, 0.45);
+}
+
+#game-screen.multi-waiting #pull-trigger-btn {
+  pointer-events: none;
+}
+
 @keyframes turnPulse {
   0%, 100% { opacity: 1; letter-spacing: 0.14em; }
   50% { opacity: 0.85; letter-spacing: 0.18em; }

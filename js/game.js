@@ -64,6 +64,7 @@ import {
 
 const CHAMBERS = 6;
 const MAX_LOBBY_PLAYERS = 5;
+const MULTI_TURN_MS = 5000;
 
 const SINGLE_REWARDS = {
   1: { rate: 0.28, streak: 0.12, tag: 'Safe grind — small wins, many clicks' },
@@ -97,6 +98,7 @@ const state = {
   lastMessageType: '',
   winnerWallet: null,
   resultMessage: null,
+  turnStartedAt: 0,
 };
 
 const lobby = {
@@ -122,6 +124,8 @@ let nextPlayerId = 1;
 let lobbyPollTimer = null;
 let lobbyUnsubscribe = null;
 let lastSeenTurnSeq = 0;
+let multiCountdownTimer = null;
+let multiAutoPullKey = '';
 let syncingRemoteGame = false;
 let lastMergedLobbyAt = 0;
 let lastRenderedPot = null;
@@ -175,6 +179,7 @@ async function runTx(label, fn) {
 
 export function initGame() {
   initUiPolish();
+  ensureMultiCountdownWatch();
   bindSetupEvents();
   bindLobbyEvents();
   bindGameEvents();
@@ -946,6 +951,7 @@ function buildGameStateSnapshot() {
     lastAction: state.lastAction ? { ...state.lastAction } : null,
     winnerWallet: state.winnerWallet,
     resultMessage: state.resultMessage,
+    turnStartedAt: state.turnStartedAt || 0,
   };
 }
 
@@ -970,6 +976,80 @@ function applyGameStateSnapshot(gs) {
   state.winnerWallet = gs.winnerWallet || null;
   state.resultMessage = gs.resultMessage || null;
   state.turnSeq = gs.turnSeq ?? 0;
+  state.turnStartedAt = gs.turnStartedAt || 0;
+  updateMultiTurnPresentation();
+}
+
+function stampTurnStart() {
+  if (state.mode !== 'multi' || state.gameOver) return;
+  state.turnStartedAt = Date.now();
+  multiAutoPullKey = '';
+}
+
+function clearMultiCountdown() {
+  if (multiCountdownTimer) {
+    clearInterval(multiCountdownTimer);
+    multiCountdownTimer = null;
+  }
+}
+
+function ensureMultiCountdownWatch() {
+  if (multiCountdownTimer) return;
+  multiCountdownTimer = setInterval(() => {
+    if (state.mode !== 'multi' || state.gameOver) return;
+    updateMultiTurnPresentation();
+    tryMultiAutoPull();
+  }, 200);
+}
+
+function getMultiTurnRemainingMs() {
+  if (!state.turnStartedAt) return MULTI_TURN_MS;
+  return Math.max(0, MULTI_TURN_MS - (Date.now() - state.turnStartedAt));
+}
+
+function tryMultiAutoPull() {
+  if (state.mode !== 'multi' || state.gameOver || state.isProcessing) return;
+  if (!isMyTurn()) return;
+  if (getMultiTurnRemainingMs() > 0) return;
+
+  const guardKey = `${state.turnSeq}-${state.currentPlayerIndex}`;
+  if (multiAutoPullKey === guardKey) return;
+  multiAutoPullKey = guardKey;
+  void pullTrigger({ auto: true });
+}
+
+function updateMultiTurnPresentation() {
+  const gameScreenEl = document.getElementById('game-screen');
+  const countdownEl = $('#turn-countdown');
+  const current = getCurrentPlayer();
+  const inMulti = state.mode === 'multi' && !state.gameOver && gameScreenEl?.classList.contains('active');
+  const mine = inMulti && isMyTurn();
+  const waiting = inMulti && !mine;
+
+  document.body.classList.toggle('multi-your-turn', mine && !state.isProcessing);
+  document.body.classList.toggle('multi-waiting', waiting || (mine && state.isProcessing));
+  gameScreenEl?.classList.toggle('multi-your-turn', mine && !state.isProcessing);
+  gameScreenEl?.classList.toggle('multi-waiting', waiting || (mine && state.isProcessing));
+
+  if (!countdownEl || !inMulti || !current?.alive) {
+    countdownEl?.classList.add('hidden');
+    if (countdownEl) countdownEl.textContent = '';
+    return;
+  }
+
+  const secs = Math.ceil(getMultiTurnRemainingMs() / 1000);
+  countdownEl.classList.remove('hidden');
+
+  if (state.isProcessing) {
+    countdownEl.textContent = `${current.name} is pulling the trigger…`;
+    return;
+  }
+
+  if (mine) {
+    countdownEl.textContent = secs > 0 ? `Your turn — pull within ${secs}s` : 'Pulling trigger…';
+  } else {
+    countdownEl.textContent = secs > 0 ? `${current.name}'s turn — ${secs}s` : `${current.name} is shooting…`;
+  }
 }
 
 function persistMultiGameState() {
@@ -1067,8 +1147,13 @@ async function syncMultiGameFromStore(gs) {
         } else if (gs.lastAction.type === 'forfeit') {
           setMessage(`${gs.lastAction.playerName} left the game — stake forfeited.`, 'danger');
         } else if (gs.lastAction.type === 'shot') {
-          const aliveNames = gs.players.filter((p) => p.alive).map((p) => p.name);
-          const eliminatedCount = gs.players.filter((p) => !p.alive).length;
+          const aliveNames =
+            gs.lastAction.aliveNamesBefore ||
+            gs.players.filter((p) => p.alive).map((p) => p.name);
+          const eliminatedCount =
+            gs.lastAction.eliminatedCountBefore ??
+            gs.players.filter((p) => !p.alive).length;
+          duckMusic(true);
           const { playGangCinema } = await getCinema();
           await playGangCinema({
             playerName: gs.lastAction.playerName,
@@ -1077,6 +1162,7 @@ async function syncMultiGameFromStore(gs) {
             eliminatedCount,
             totalPlayers: gs.players.length,
           });
+          duckMusic(false);
         }
       } finally {
         syncingRemoteGame = false;
@@ -1100,6 +1186,7 @@ async function syncMultiGameFromStore(gs) {
   }
   renderGameUI();
   if (state.lastMessage) setMessage(state.lastMessage, state.lastMessageType);
+  updateMultiTurnPresentation();
 }
 
 function showMultiResultFromState(gs) {
@@ -1985,6 +2072,7 @@ function resetGameState() {
   state.lastAction = null;
   state.winnerWallet = null;
   state.resultMessage = null;
+  state.turnStartedAt = 0;
   lastRenderedPot = null;
 }
 
@@ -2017,6 +2105,7 @@ function beginGame(message) {
   spinCylinder();
   showScreen('game');
   resetGameUiForNewRound();
+  if (state.mode === 'multi') stampTurnStart();
   renderGameUI();
   finishTurn();
   setMessage(message);
@@ -2101,7 +2190,7 @@ function advanceToNextPlayer() {
   state.currentPlayerIndex = next;
 }
 
-async function pullTrigger() {
+async function pullTrigger({ auto = false } = {}) {
   if (state.isProcessing || state.gameOver) return;
 
   const player = getCurrentPlayer();
@@ -2113,6 +2202,7 @@ async function pullTrigger() {
       return;
     }
     state.isProcessing = true;
+    updateMultiTurnPresentation();
     persistMultiGameState();
   } else {
     state.isProcessing = true;
@@ -2176,11 +2266,22 @@ async function pullTrigger() {
   await delay(900);
 
   if (isBullet) {
-    setMessage(`BANG! ${player.name} drops off the chair — dead in the alley.`, 'danger');
+    setMessage(
+      auto
+        ? `Time's up — BANG! ${player.name} drops off the chair.`
+        : `BANG! ${player.name} drops off the chair — dead in the alley.`,
+      'danger'
+    );
     player.alive = false;
 
     if (state.mode === 'multi') {
-      recordMultiTurnAction({ type: 'shot', playerName: player.name, survived: false });
+      recordMultiTurnAction({
+        type: 'shot',
+        playerName: player.name,
+        survived: false,
+        aliveNamesBefore: aliveBefore,
+        eliminatedCountBefore: eliminatedBefore,
+      });
       lastSeenTurnSeq = state.turnSeq;
     }
 
@@ -2200,8 +2301,19 @@ async function pullTrigger() {
         'success'
       );
     } else {
-      setMessage(`Click! ${player.name} survives — shaky hands pass the revolver.`, 'success');
-      recordMultiTurnAction({ type: 'shot', playerName: player.name, survived: true });
+      setMessage(
+        auto
+          ? `Time's up — click! ${player.name} survives.`
+          : `Click! ${player.name} survives — shaky hands pass the revolver.`,
+        'success'
+      );
+      recordMultiTurnAction({
+        type: 'shot',
+        playerName: player.name,
+        survived: true,
+        aliveNamesBefore: aliveBefore,
+        eliminatedCountBefore: eliminatedBefore,
+      });
       lastSeenTurnSeq = state.turnSeq;
     }
 
@@ -2219,6 +2331,7 @@ async function continueAfterSafe() {
 
   if (state.mode === 'multi') {
     advanceToNextPlayer();
+    stampTurnStart();
     persistMultiGameState();
   }
 
@@ -2239,6 +2352,7 @@ async function reloadCylinder() {
 
   if (state.mode === 'multi') {
     advanceToNextPlayer();
+    stampTurnStart();
     renderGameUI();
     persistMultiGameState();
   }
@@ -2316,6 +2430,7 @@ function handleElimination() {
   setConcealChamberLoadout(true);
   void spinCylinder().then(() => {
     advanceToNextPlayer();
+    stampTurnStart();
     renderGameUI();
     setMessage(`Round ${state.round} — ${getCurrentPlayer().name}'s turn.`);
     persistMultiGameState();
@@ -2362,6 +2477,8 @@ function finishTurn() {
     triggerBtn.disabled = false;
   }
 
+  updateMultiTurnPresentation();
+
   if (state.mode === 'single' && state.survives > 0 && !state.gameOver) {
     $('#cash-out-btn').classList.remove('hidden');
     $('#cash-out-btn').disabled = false;
@@ -2375,6 +2492,9 @@ function finishTurn() {
 function endGame(winner, message) {
   state.gameOver = true;
   state.isProcessing = false;
+  clearMultiCountdown();
+  document.body.classList.remove('multi-your-turn', 'multi-waiting');
+  $('#game-screen')?.classList.remove('multi-your-turn', 'multi-waiting');
   stopGameMusic();
 
   if (winner) playWin();

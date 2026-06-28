@@ -322,8 +322,19 @@ export function openBetHistory() {
 
 async function goToMainMenu() {
   if (isMultiGameInProgress()) {
+    const wallet = getPublicKeyString();
+    const me = state.players.find((p) => p.wallet === wallet);
+    if (me && !me.alive) {
+      finishLocalMultiExitScreen(me);
+      showScreen('setup');
+      return;
+    }
     alert('Finish the match or use “Leave Game (Forfeit)” before returning to the menu.');
     return;
+  }
+
+  if (state.mode === 'multi' && !lobby.active) {
+    exitLocalMultiGameSession();
   }
 
   if (isSingleGameInProgress()) {
@@ -443,6 +454,7 @@ function bindGameEvents() {
       alert('Finish the game first. Leaving counts as a forfeit loss.');
       return;
     }
+    if (state.mode === 'multi') exitLocalMultiGameSession();
     resetGameState();
     resetGameUiForNewRound();
     resetLobby();
@@ -757,6 +769,34 @@ function detachLocalLobbyView() {
   lobby.gamePda = null;
   lobby.players = [];
   lobby.departedPlayers = [];
+  lobby.gameState = null;
+}
+
+/** Local player left an in-progress multiplayer match — unlock menu / play again. */
+function exitLocalMultiGameSession({ joinCode = null } = {}) {
+  const code = joinCode || lobby.joinCode;
+  const wallet = getPublicKeyString();
+
+  detachLocalLobbyView();
+  clearMultiCountdown();
+  document.body.classList.remove('multi-your-turn', 'multi-waiting');
+  $('#game-screen')?.classList.remove('multi-your-turn', 'multi-waiting');
+
+  state.gameOver = true;
+  state.isProcessing = false;
+  state.mode = 'single';
+  state.players = [];
+  state.shotVisual = null;
+  state.shootingWallet = null;
+  localPullInFlight = false;
+  multiAutoPullKey = '';
+  lastSeenTurnSeq = 0;
+  lastSeenShotVisualId = 0;
+  lastLocallyActedTurnSeq = 0;
+  lastSeenPlayerTurnKey = '';
+  eliminatedWallets.clear();
+
+  if (wallet && code) clearLastLobbyForWallet(wallet);
 }
 
 function updateJoinStakeFields() {
@@ -827,10 +867,11 @@ function syncNextPlayerIdFromLobby() {
 }
 
 function isMultiGameInProgress() {
+  if (!lobby.active) return false;
   return (
     state.mode === 'multi' &&
     !state.gameOver &&
-    (lobby.status === 'started' || (lobby.gameState && !lobby.gameState.gameOver))
+    (lobby.status === 'started' || !!(lobby.gameState && !lobby.gameState.gameOver))
   );
 }
 
@@ -849,7 +890,17 @@ export async function abandonMultiGameIfActive() {
 
 function isAliveInStoredGame(stored, wallet) {
   const player = stored.gameState?.players?.find((p) => p.wallet === wallet);
-  return !!(player && player.alive);
+  if (!player) return false;
+  if (stored.gameState.eliminatedWallets?.includes(wallet)) return false;
+  return !!player.alive;
+}
+
+function finishLocalMultiExitScreen(me, { eliminated = false } = {}) {
+  const bet = me?.bet || 0;
+  exitLocalMultiGameSession();
+  if (resultScreen.classList.contains('active')) return;
+  if (eliminated) showEliminatedResultScreen(bet);
+  else showForfeitResultScreen(bet);
 }
 
 function showForfeitResultScreen(betSol) {
@@ -901,12 +952,31 @@ async function maybeSettleWinnerOnChain(winner) {
   }
 }
 
-async function forfeitActiveMultiGame({ skipConfirm = false } = {}) {
-  if (!isMultiGameInProgress()) return false;
+async function persistMultiGameStateAsync() {
+  if (state.mode !== 'multi' || !lobby.active || !lobby.joinCode) return;
+  syncLobbyPlayersAliveFromGame();
+  lobby.gameState = buildGameStateSnapshot();
+  lobby.status = state.gameOver ? 'finished' : 'started';
+  await persistLobbyRemote();
+}
 
+async function forfeitActiveMultiGame({ skipConfirm = false } = {}) {
   const wallet = getPublicKeyString();
   const me = state.players.find((p) => p.wallet === wallet);
-  if (!me?.alive) return false;
+  const joinCode = lobby.joinCode;
+
+  if (!isMultiGameInProgress()) {
+    if (state.mode === 'multi' && me && !me.alive) {
+      finishLocalMultiExitScreen(me);
+      return true;
+    }
+    return false;
+  }
+
+  if (!me?.alive) {
+    finishLocalMultiExitScreen(me);
+    return true;
+  }
 
   if (
     !skipConfirm &&
@@ -920,7 +990,11 @@ async function forfeitActiveMultiGame({ skipConfirm = false } = {}) {
 
   if (getCurrentPlayer()?.wallet === wallet) {
     advanceToNextPlayer();
+    ensureCurrentPlayerAlive();
   }
+
+  releaseMultiTurnLock();
+  localPullInFlight = false;
 
   state.lastMessage = `${me.name} left the game — stake forfeited.`;
   state.lastMessageType = 'danger';
@@ -934,7 +1008,7 @@ async function forfeitActiveMultiGame({ skipConfirm = false } = {}) {
     state.gameOver = true;
     recordMultiTurnAction({ type: 'win', winnerName: winner.name, winnerWallet: winner.wallet });
     lastSeenTurnSeq = state.turnSeq;
-    persistMultiGameState();
+    await persistMultiGameStateAsync();
     void maybeSettleWinnerOnChain(winner);
   } else if (alive.length === 0) {
     state.gameOver = true;
@@ -942,18 +1016,16 @@ async function forfeitActiveMultiGame({ skipConfirm = false } = {}) {
     state.resultMessage = 'Everyone is out. No winner.';
     recordMultiTurnAction({ type: 'forfeit', playerName: me.name, survived: false });
     lastSeenTurnSeq = state.turnSeq;
-    persistMultiGameState();
+    await persistMultiGameStateAsync();
   } else {
+    stampTurnStart();
     recordMultiTurnAction({ type: 'forfeit', playerName: me.name, survived: false });
     lastSeenTurnSeq = state.turnSeq;
-    persistMultiGameState();
+    await persistMultiGameStateAsync();
   }
 
   recordGameHistory(null, 'Left during game — stake forfeited.', { forfeit: true });
-  clearLastLobbyForWallet(wallet);
-  stopLobbySync();
-  showForfeitResultScreen(me.bet);
-  detachLocalLobbyView();
+  finishLocalMultiExitScreen(me);
   return true;
 }
 
@@ -1445,6 +1517,8 @@ async function syncMultiGameFromStore(gs) {
     }
     return;
   }
+
+  if (!lobby.active) return;
 
   const wallet = getPublicKeyString();
   const isOnGameScreen = gameScreen.classList.contains('active');
@@ -2907,7 +2981,7 @@ async function handleElimination(eliminatedPlayer, { shotAction = null } = {}) {
   if (iWasEliminated) {
     const bet = eliminatedPlayer?.bet || state.players.find((p) => p.wallet === eliminatedWallet)?.bet || 0;
     recordGameHistory(null, 'Eliminated during game — stake forfeited.', { forfeit: true });
-    showEliminatedResultScreen(bet);
+    finishLocalMultiExitScreen({ bet }, { eliminated: true });
   }
 }
 

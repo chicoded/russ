@@ -87,6 +87,7 @@ const state = {
   cylinder: [],
   currentChamber: 0,
   chambersChecked: 0,
+  firedChambers: [],
   survives: 0,
   gameOver: false,
   isProcessing: false,
@@ -943,6 +944,7 @@ function buildGameStateSnapshot() {
     cylinder: [...state.cylinder],
     currentChamber: state.currentChamber,
     chambersChecked: state.chambersChecked,
+    firedChambers: [...(state.firedChambers || [])],
     survives: state.survives,
     gameOver: state.gameOver,
     isProcessing: state.isProcessing,
@@ -967,6 +969,7 @@ function applyGameStateSnapshot(gs) {
   state.cylinder = [...gs.cylinder];
   state.currentChamber = gs.currentChamber;
   state.chambersChecked = gs.chambersChecked;
+  state.firedChambers = [...(gs.firedChambers || [])];
   state.survives = gs.survives ?? 0;
   state.gameOver = !!gs.gameOver;
   state.isProcessing = !!gs.isProcessing;
@@ -2057,6 +2060,7 @@ function resetGameState() {
   state.round = 1;
   state.survives = 0;
   state.chambersChecked = 0;
+  state.firedChambers = [];
   state.gameOver = false;
   state.isProcessing = false;
   state.currentPlayerIndex = 0;
@@ -2122,7 +2126,38 @@ function loadCylinder() {
   });
   state.currentChamber = Math.floor(Math.random() * CHAMBERS);
   state.chambersChecked = 0;
+  state.firedChambers = Array(CHAMBERS).fill(false);
   resetChamberVisuals(true);
+}
+
+function markChamberFired(index) {
+  if (!state.firedChambers?.length) {
+    state.firedChambers = Array(CHAMBERS).fill(false);
+  }
+  state.firedChambers[index] = true;
+}
+
+/**
+ * Reload without a death:
+ * - 1 bullet: all 6 chambers fired safely (full rotation)
+ * - 2+ bullets: every empty chamber was safe AND every bullet chamber was fired
+ */
+function shouldExhaustReloadCylinder() {
+  if (state.bullets <= 1) {
+    return state.chambersChecked >= CHAMBERS;
+  }
+
+  const emptySlots = CHAMBERS - state.bullets;
+  let safeEmpties = 0;
+  let bulletsFired = 0;
+
+  for (let i = 0; i < CHAMBERS; i++) {
+    if (!state.firedChambers?.[i]) continue;
+    if (state.cylinder[i]) bulletsFired += 1;
+    else safeEmpties += 1;
+  }
+
+  return safeEmpties >= emptySlots && bulletsFired >= state.bullets;
 }
 
 function shuffle(arr) {
@@ -2265,6 +2300,8 @@ async function pullTrigger({ auto = false } = {}) {
   revealChamberResult(chamberEl, isBullet ? 'bullet' : 'empty');
   await delay(900);
 
+  markChamberFired(state.currentChamber);
+
   if (isBullet) {
     setMessage(
       auto
@@ -2324,8 +2361,9 @@ async function pullTrigger({ auto = false } = {}) {
 async function continueAfterSafe() {
   state.currentChamber = (state.currentChamber + 1) % CHAMBERS;
 
-  // All 6 chambers fired with no death — must reload before continuing
-  if (state.chambersChecked >= CHAMBERS) {
+  // Multi-bullet: reload only when all empty chambers were safe AND all bullet slots fired
+  // Single bullet: reload after full 6-chamber rotation with no death
+  if (shouldExhaustReloadCylinder()) {
     await reloadExhaustedCylinder();
     return;
   }
@@ -2359,7 +2397,7 @@ async function reloadExhaustedCylinder() {
   const next = getCurrentPlayer();
   setMessage(
     state.mode === 'multi'
-      ? `Cartridge spent — reloaded. ${next?.name || 'Next player'}'s turn.`
+      ? `Cartridge clear — all safe chambers spent, bullets used. Reloaded. ${next?.name || 'Next player'}'s turn.`
       : `Round ${state.round} — Cylinder reloaded and spun.`
   );
   renderGameUI();

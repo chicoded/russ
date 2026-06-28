@@ -1042,6 +1042,9 @@ async function persistLobbyRemote() {
 }
 
 function buildGameStateSnapshot() {
+  if (state.mode === 'multi' && !state.gameOver) {
+    ensureCurrentPlayerAlive();
+  }
   const actor = getCurrentPlayer();
   const shootingWallet = localPullInFlight ? actor?.wallet || null : null;
   return {
@@ -1079,6 +1082,18 @@ function markPlayerEliminated(wallet) {
   if (lp) lp.alive = false;
 }
 
+function isPlayerEliminated(wallet) {
+  if (!wallet) return false;
+  if (eliminatedWallets.has(wallet)) return true;
+  const p = state.players.find((pl) => pl.wallet === wallet);
+  return !!(p && !p.alive);
+}
+
+function isCurrentPlayerAlive() {
+  const current = state.players[state.currentPlayerIndex];
+  return !!(current && current.alive);
+}
+
 function syncEliminatedFromPlayers(players = []) {
   for (const p of players) {
     if (p.wallet && !p.alive) markPlayerEliminated(p.wallet);
@@ -1100,15 +1115,17 @@ function mergePlayersFromSnapshot(gsPlayers = []) {
 
 function ensureCurrentPlayerAlive() {
   if (state.mode !== 'multi' || state.gameOver) return;
-  if (getAlivePlayers().length === 0) return;
+  const alive = getAlivePlayers();
+  if (alive.length === 0) return;
+  if (isCurrentPlayerAlive()) return;
 
-  let guard = 0;
-  while (guard < state.players.length) {
-    const current = state.players[state.currentPlayerIndex];
-    if (current?.alive) return;
+  if (alive.length > 1) {
     advanceToNextPlayer();
-    guard += 1;
+    if (isCurrentPlayerAlive()) return;
   }
+
+  const idx = state.players.findIndex((p) => p.alive);
+  if (idx >= 0) state.currentPlayerIndex = idx;
 }
 
 function syncLobbyPlayersAliveFromGame() {
@@ -1216,6 +1233,9 @@ function applyGameStateSnapshot(gs) {
   if (gs.lastAction?.type === 'shot' && gs.lastAction.survived === false) {
     markPlayerEliminatedByName(gs.lastAction.playerName, gs.players);
   }
+  if (gs.lastAction?.type === 'forfeit') {
+    markPlayerEliminatedByName(gs.lastAction.playerName, gs.players);
+  }
   state.players = mergePlayersFromSnapshot(gs.players);
   state.pot = gs.pot;
   state.round = gs.round;
@@ -1296,6 +1316,7 @@ function getMultiTurnRemainingMs() {
 
 function tryMultiAutoPull() {
   if (state.mode !== 'multi' || state.gameOver || localPullInFlight) return;
+  ensureCurrentPlayerAlive();
   if (!isMyTurn()) return;
   if (getMultiTurnRemainingMs() > 0) return;
 
@@ -1306,6 +1327,7 @@ function tryMultiAutoPull() {
 
 function tryHostForcePull() {
   if (state.mode !== 'multi' || state.gameOver || state.isProcessing) return;
+  ensureCurrentPlayerAlive();
   if (!isLobbyHost() || isMyTurn()) return;
   if (getTurnElapsedMs() < MULTI_HOST_FORCE_MS) return;
 
@@ -1413,6 +1435,7 @@ async function playSpectatorRevolverSequence(sv) {
 
 function persistMultiGameState() {
   if (state.mode !== 'multi' || !lobby.active || !lobby.joinCode) return;
+  ensureCurrentPlayerAlive();
   syncLobbyPlayersAliveFromGame();
   lobby.gameState = buildGameStateSnapshot();
   lobby.status = state.gameOver ? 'finished' : 'started';
@@ -1421,6 +1444,7 @@ function persistMultiGameState() {
 
 function isMyTurn() {
   if (state.mode !== 'multi' || state.gameOver) return false;
+  ensureCurrentPlayerAlive();
   const player = getCurrentPlayer();
   return !!(player?.alive && player.wallet === getPublicKeyString());
 }
@@ -1555,6 +1579,7 @@ async function syncMultiGameFromStore(gs) {
             potLabel: formatSol(gs.pot),
           });
         } else if (gs.lastAction.type === 'forfeit') {
+          markPlayerEliminatedByName(gs.lastAction.playerName, gs.players);
           setMessage(`${gs.lastAction.playerName} left the game — stake forfeited.`, 'danger');
         } else if (gs.lastAction.type === 'shot') {
           if (!gs.lastAction.survived) {
@@ -2631,21 +2656,22 @@ function getCurrentPlayer() {
 }
 
 function advanceToNextPlayer() {
-  const aliveCount = getAlivePlayers().length;
-  if (aliveCount === 0) return;
+  const alivePlayers = getAlivePlayers();
+  if (alivePlayers.length <= 1) return;
 
   let next = state.currentPlayerIndex;
-  for (let i = 0; i < state.players.length; i += 1) {
+  do {
     next = (next + 1) % state.players.length;
-    if (state.players[next].alive) {
-      state.currentPlayerIndex = next;
-      return;
-    }
-  }
+  } while (!state.players[next].alive);
+
+  state.currentPlayerIndex = next;
 }
 
 async function pullTrigger({ auto = false, forced = false } = {}) {
-  if (state.mode === 'multi') reconcileMultiTurnLock();
+  if (state.mode === 'multi') {
+    reconcileMultiTurnLock();
+    ensureCurrentPlayerAlive();
+  }
   if (localPullInFlight || state.gameOver) return;
   if (state.mode === 'multi' && state.isProcessing && !isActorOnThisDevice()) return;
 
@@ -2909,9 +2935,8 @@ async function reloadCylinder() {
 }
 
 async function handleElimination(eliminatedPlayer, { shotAction = null } = {}) {
-  renderGameUI();
-
   if (state.mode === 'single') {
+    renderGameUI();
     const finishLoss = () => endGame(null, 'You hit a bullet. Stake forfeited on-chain.');
     if (state.sessionId) {
       runTx('Forfeiting stake on-chain', () => soloForfeitOnChain({ sessionId: state.sessionId }))
@@ -3155,6 +3180,10 @@ function renderGameUI() {
 
   const current = getCurrentPlayer();
   const turnEl = $('#turn-indicator');
+
+  if (state.mode === 'multi' && !state.gameOver && !isCurrentPlayerAlive()) {
+    ensureCurrentPlayerAlive();
+  }
 
   if (state.gameOver) {
     turnEl.textContent = 'Game Over';

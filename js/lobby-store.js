@@ -318,18 +318,11 @@ export function removeOpenLobby(joinCode) {
   void deleteRemoteLobby(joinCode);
 }
 
-export function buildJoinLink(joinCode, lobbySnapshot = null) {
+export function buildJoinLink(joinCode) {
   const origin = getPublicSiteOrigin() || window.location.origin;
   const url = new URL(window.location.pathname || '/', origin);
   url.searchParams.set('join', joinCode.toUpperCase());
   url.hash = '';
-
-  if (lobbySnapshot?.joinCode) {
-    const encoded = encodeBase64Url(JSON.stringify(lobbySnapshot));
-    url.searchParams.set('d', encoded);
-    url.hash = `lobby=${encoded}`;
-  }
-
   return url.toString();
 }
 

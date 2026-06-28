@@ -29,7 +29,6 @@ import {
   clearLobbyBootstrapFromUrl,
   generateJoinCode,
   getJoinCodeFromUrl,
-  getLobbyBootstrapFromUrl,
   getLastLobbyForWallet,
   hydrateLobbyFromStore,
   isOnlineLobbySyncEnabled,
@@ -1248,8 +1247,8 @@ async function copyJoinKey() {
 
 async function shareJoinLink() {
   if (!lobby.joinCode) return;
-  const link = buildJoinLink(lobby.joinCode, serializeLobbyState(lobby));
-  const shareText = `Join my Contract Roulette lobby — key ${lobby.joinCode}`;
+  const link = buildJoinLink(lobby.joinCode);
+  const shareText = `Join my Contract Roulette game — key: ${lobby.joinCode}`;
 
   if (navigator.share) {
     try {
@@ -1261,16 +1260,16 @@ async function shareJoinLink() {
   }
 
   try {
-    await navigator.clipboard.writeText(link);
-    flashCopyBtn('#share-join-link-btn', 'Link copied!');
+    await navigator.clipboard.writeText(lobby.joinCode);
+    flashCopyBtn('#share-join-link-btn', 'Key copied!');
   } catch {
-    window.prompt('Copy and send this invite link:', link);
+    window.prompt('Copy join key:', lobby.joinCode);
   }
 }
 
 async function copyJoinLink() {
   if (!lobby.joinCode) return;
-  const link = buildJoinLink(lobby.joinCode, serializeLobbyState(lobby));
+  const link = buildJoinLink(lobby.joinCode);
   try {
     await navigator.clipboard.writeText(link);
     flashCopyBtn('#copy-join-link-btn', 'Copied!');
@@ -1461,10 +1460,10 @@ async function joinWithCodeFromSetup() {
   }
 }
 
-/** Auto-join when a friend opens the host's invite link (?join=…&d=…). */
+/** Auto-join when a friend opens ?join=KEY (looks up lobby from cloud). */
 export async function maybeAutoJoinFromInviteLink() {
   const code = getJoinCodeFromUrl();
-  if (!code || !getLobbyBootstrapFromUrl()) return false;
+  if (!code) return false;
 
   const wallet = getPublicKeyString();
   if (!wallet) return false;
@@ -1734,7 +1733,7 @@ function renderLobby() {
 
   const inviteLinkEl = $('#lobby-invite-link');
   if (inviteLinkEl && lobby.joinCode) {
-    const link = buildJoinLink(lobby.joinCode, serializeLobbyState(lobby));
+    const link = buildJoinLink(lobby.joinCode);
     inviteLinkEl.textContent = link;
     inviteLinkEl.title = link;
   }
@@ -1742,7 +1741,7 @@ function renderLobby() {
   const keyHint = document.querySelector('.lobby-key-hint');
   if (keyHint) {
     keyHint.innerHTML =
-      'Tap <strong>Invite Friend</strong> and send the link. Friends on other phones must open that link — the key alone will not work.';
+      'Share the <strong>join key</strong> or short link. Friends can type the key under Multiplayer → Join with Key.';
   }
 
   $('#rules-list').innerHTML = renderRulesListHtml(lobby.rules);

@@ -103,6 +103,7 @@ const state = {
   resultMessage: null,
   turnStartedAt: 0,
   shotVisual: null,
+  shootingWallet: null,
 };
 
 const lobby = {
@@ -953,6 +954,8 @@ async function persistLobbyRemote() {
 }
 
 function buildGameStateSnapshot() {
+  const actor = getCurrentPlayer();
+  const shootingWallet = localPullInFlight ? actor?.wallet || null : null;
   return {
     turnSeq: state.turnSeq,
     bullets: state.bullets,
@@ -966,7 +969,8 @@ function buildGameStateSnapshot() {
     firedChambers: [...(state.firedChambers || [])],
     survives: state.survives,
     gameOver: state.gameOver,
-    isProcessing: state.isProcessing,
+    isProcessing: !!shootingWallet,
+    shootingWallet,
     lastMessage: state.lastMessage,
     lastMessageType: state.lastMessageType,
     lastAction: state.lastAction ? { ...state.lastAction } : null,
@@ -1023,6 +1027,32 @@ function syncLobbyPlayersAliveFromGame() {
 function releaseMultiTurnLock() {
   state.isProcessing = false;
   state.shotVisual = null;
+  state.shootingWallet = null;
+}
+
+function resolveShootingWallet(gs) {
+  if (gs.shootingWallet) return gs.shootingWallet;
+  if (gs.isProcessing && gs.players?.[gs.currentPlayerIndex]?.wallet) {
+    return gs.players[gs.currentPlayerIndex].wallet;
+  }
+  return null;
+}
+
+function applyRemoteShotFlags(gs) {
+  const wallet = getPublicKeyString();
+  const remoteShooter = resolveShootingWallet(gs);
+  const iAmActor = isActorOnThisDevice();
+
+  if (iAmActor) {
+    state.isProcessing = localPullInFlight;
+    state.shootingWallet = localPullInFlight ? wallet : null;
+    if (!localPullInFlight) state.shotVisual = null;
+    return;
+  }
+
+  state.shootingWallet = remoteShooter;
+  state.isProcessing = !!remoteShooter;
+  state.shotVisual = remoteShooter && gs.shotVisual ? { ...gs.shotVisual } : null;
 }
 
 function isActorOnThisDevice() {
@@ -1101,19 +1131,7 @@ function applyGameStateSnapshot(gs) {
   state.turnSeq = gs.turnSeq ?? 0;
   state.turnStartedAt = gs.turnStartedAt || 0;
 
-  const wallet = getPublicKeyString();
-  const actorWallet = state.players[state.currentPlayerIndex]?.wallet;
-  const iAmActor = !!(actorWallet && actorWallet === wallet);
-
-  if (iAmActor) {
-    if (!localPullInFlight) {
-      state.isProcessing = false;
-      state.shotVisual = null;
-    }
-  } else {
-    state.isProcessing = !!gs.isProcessing;
-    state.shotVisual = gs.isProcessing && gs.shotVisual ? { ...gs.shotVisual } : null;
-  }
+  applyRemoteShotFlags(gs);
 
   ensureCurrentPlayerAlive();
   syncLobbyPlayersAliveFromGame();
@@ -1202,7 +1220,8 @@ function updateMultiTurnPresentation() {
   const inMulti = state.mode === 'multi' && !state.gameOver && gameScreenEl?.classList.contains('active');
   const mine = inMulti && isMyTurn();
   const actorShooting = mine && localPullInFlight;
-  const remoteShot = !mine && state.isProcessing;
+  const remoteShooter = state.shootingWallet;
+  const remoteShot = !mine && !!remoteShooter && remoteShooter !== getPublicKeyString();
   const shooting = actorShooting || remoteShot;
   const waiting = inMulti && !mine;
 
@@ -1231,7 +1250,9 @@ function updateMultiTurnPresentation() {
   }
 
   if (remoteShot) {
-    const line = `${current.name} is pulling the trigger…`;
+    const shooter = state.players.find((p) => p.wallet === remoteShooter);
+    const shooterName = shooter?.name || current?.name || 'Player';
+    const line = `${shooterName} is pulling the trigger…`;
     countdownEl.textContent = line;
     if (watchHint) {
       watchHint.textContent = `Watching — ${line}`;
@@ -1368,8 +1389,25 @@ function tryResumeActiveMultiGame() {
   ensureLobbyMembershipSync();
 }
 
+function getLatestLobbyGameState(fallback = null) {
+  if (!lobby.joinCode) return fallback;
+  const stored = loadOpenLobby(lobby.joinCode);
+  return stored?.gameState || fallback;
+}
+
 async function syncMultiGameFromStore(gs) {
-  if (!gs || syncingRemoteGame) return;
+  if (!gs) return;
+
+  if (syncingRemoteGame) {
+    const latestGs = getLatestLobbyGameState(gs);
+    if (latestGs) {
+      applyGameStateSnapshot(latestGs);
+      lobby.gameState = latestGs;
+      refreshMultiTurnControls();
+      updateMultiTurnPresentation();
+    }
+    return;
+  }
 
   const wallet = getPublicKeyString();
   const isOnGameScreen = gameScreen.classList.contains('active');
@@ -1437,11 +1475,12 @@ async function syncMultiGameFromStore(gs) {
     lastSeenTurnSeq = gs.turnSeq;
   }
 
-  applyGameStateSnapshot(gs);
-  lobby.gameState = gs;
+  const latestGs = getLatestLobbyGameState(gs);
+  applyGameStateSnapshot(latestGs);
+  lobby.gameState = latestGs;
 
-  if (gs.gameOver) {
-    if (!isOnResultScreen) showMultiResultFromState(gs);
+  if (latestGs.gameOver) {
+    if (!isOnResultScreen) showMultiResultFromState(latestGs);
     return;
   }
 
@@ -1537,6 +1576,7 @@ function mergeLobbyFromStore(stored) {
         ? true
         : gs?.turnSeq === localGs?.turnSeq &&
           gs?.currentPlayerIndex === localGs?.currentPlayerIndex &&
+          gs?.shootingWallet === localGs?.shootingWallet &&
           !!gs?.isProcessing === !!localGs?.isProcessing &&
           gs?.shotVisual?.id === localGs?.shotVisual?.id;
     if (sameGame) return;
@@ -2347,6 +2387,7 @@ function resetGameState() {
   state.resultMessage = null;
   state.turnStartedAt = 0;
   state.shotVisual = null;
+  state.shootingWallet = null;
   lastRenderedPot = null;
   lastSeenShotVisualId = 0;
   lastLocallyActedTurnSeq = 0;
@@ -2655,6 +2696,10 @@ async function continueAfterSafe() {
     releaseMultiTurnLock();
     localPullInFlight = false;
     advanceToNextPlayer();
+    ensureCurrentPlayerAlive();
+    stampTurnStart();
+    setMessage(`Click! ${getCurrentPlayer()?.name}'s turn — pull the trigger.`, 'success');
+    persistMultiGameState();
   }
 
   setConcealChamberLoadout(true);
@@ -2662,8 +2707,6 @@ async function continueAfterSafe() {
   await spinCylinderVisualOnly();
 
   if (handedOff) {
-    stampTurnStart();
-    setMessage(`Click! ${getCurrentPlayer()?.name}'s turn — pull the trigger.`, 'success');
     persistMultiGameState();
   }
 
@@ -2682,19 +2725,18 @@ async function reloadExhaustedCylinder() {
     releaseMultiTurnLock();
     localPullInFlight = false;
     advanceToNextPlayer();
+    ensureCurrentPlayerAlive();
+    stampTurnStart();
+    const next = getCurrentPlayer();
+    setMessage(
+      `Cartridge clear — all safe chambers spent, bullets used. Reloaded. ${next?.name || 'Next player'}'s turn.`
+    );
+    persistMultiGameState();
   }
 
   await spinCylinder();
-  const next = getCurrentPlayer();
-  setMessage(
-    state.mode === 'multi'
-      ? `Cartridge clear — all safe chambers spent, bullets used. Reloaded. ${next?.name || 'Next player'}'s turn.`
-      : `Round ${state.round} — Cylinder reloaded and spun.`
-  );
-
-  if (handedOff) {
-    stampTurnStart();
-    persistMultiGameState();
+  if (!handedOff) {
+    setMessage(`Round ${state.round} — Cylinder reloaded and spun.`);
   }
 
   renderGameUI();
@@ -2709,16 +2751,16 @@ async function reloadAfterDeath(eliminatedName) {
   localPullInFlight = false;
   advanceToNextPlayer();
   ensureCurrentPlayerAlive();
-  await spinCylinder();
+  state.round += 1;
+  stampTurnStart();
   const next = getCurrentPlayer();
   setMessage(
     `${eliminatedName} is OUT. Fresh cylinder loaded — ${next?.name || 'Next player'}'s turn.`,
     'danger'
   );
-  state.round += 1;
-  stampTurnStart();
-  renderGameUI();
   persistMultiGameState();
+  await spinCylinder();
+  renderGameUI();
   finishTurn();
 }
 
@@ -2821,7 +2863,8 @@ async function cashOut() {
 function finishTurn() {
   localPullInFlight = false;
   state.isProcessing = false;
-  if (state.mode === 'multi') state.shotVisual = null;
+  state.shotVisual = null;
+  state.shootingWallet = null;
 
   if (state.mode === 'multi' && !state.gameOver) {
     persistMultiGameState();

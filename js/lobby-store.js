@@ -42,14 +42,21 @@ function encodeBase64Url(json) {
   return btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export function normalizeJoinCode(code) {
+/** Keep valid charset chars while typing (partial codes allowed). */
+export function sanitizeJoinCodeInput(code) {
   if (!code) return '';
-  const cleaned = String(code).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
-  if (cleaned.length !== 6) return '';
-  for (let i = 0; i < cleaned.length; i += 1) {
-    if (!CHARSET.includes(cleaned[i])) return '';
+  let out = '';
+  const upper = String(code).toUpperCase();
+  for (let i = 0; i < upper.length && out.length < 6; i += 1) {
+    const ch = upper[i];
+    if (CHARSET.includes(ch)) out += ch;
   }
-  return cleaned;
+  return out;
+}
+
+export function normalizeJoinCode(code) {
+  const cleaned = sanitizeJoinCodeInput(code);
+  return cleaned.length === 6 ? cleaned : '';
 }
 
 export function generateJoinCode() {

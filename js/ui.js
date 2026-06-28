@@ -64,14 +64,16 @@ export function revealChamberResult(chamberEl, result) {
   window.setTimeout(() => chamberEl.classList.remove('chamber-revealed'), 700);
 }
 
-export function updateStatBulletRacks(bullets, chambers = 6) {
+export function updateStatBulletRacks(bullets, chambers = 6, chambersRemaining = null) {
+  const remaining = chambersRemaining ?? chambers;
+
   const racks = [
     document.getElementById('stat-bullets-rack'),
     document.getElementById('stat-bullets-rack-single'),
   ].filter(Boolean);
 
   racks.forEach((rack) => {
-    rack.innerHTML = buildMiniRackMarkup(bullets, chambers);
+    rack.innerHTML = buildMiniRackMarkup(remaining, chambers);
   });
 
   const textEls = [
@@ -82,18 +84,27 @@ export function updateStatBulletRacks(bullets, chambers = 6) {
   textEls.forEach((el) => {
     el.textContent = `${bullets} / ${chambers}`;
   });
+
+  const roundEls = [
+    document.getElementById('stat-round'),
+    document.getElementById('stat-round-single'),
+  ].filter(Boolean);
+  roundEls.forEach((el) => {
+    el.textContent = `${remaining} / ${chambers}`;
+  });
 }
 
 export function refreshGameVisuals({
   bullets = 2,
   cylinder = [],
   chambersChecked = 0,
+  chambersRemaining = null,
   highlightTurn = false,
   gameOver = false,
   potChanged = false,
 } = {}) {
   syncCylinderLoadVisuals(cylinder, chambersChecked);
-  updateStatBulletRacks(bullets);
+  updateStatBulletRacks(bullets, 6, chambersRemaining);
 
   const turnEl = document.getElementById('turn-indicator');
   const reticle = document.getElementById('target-reticle');
